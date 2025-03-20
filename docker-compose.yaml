@@ -12,7 +12,7 @@ services:
     # CHANGE PATH WHEN MOVING FOLDER IN A PARENT DIRECTORY
     volumes:
       - ./docker/certs/server.crt:/etc/ssl/server.crt:ro
-      - ./dockerr/certs/server.key:/etc/ssl/server.key:ro
+      - ./docker/certs/server.key:/etc/ssl/server.key:ro
       - ./docker/conf/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./docker/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
