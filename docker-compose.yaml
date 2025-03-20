@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres_ssl
+    restart: always
+    environment:
+      POSTGRES_USER: delvauxo
+      POSTGRES_PASSWORD: yolo
+      POSTGRES_DB: yolo
+    ports:
+      - "5432:5432"
+    # CHANGE PATH WHEN MOVING FOLDER IN A PARENT DIRECTORY
+    volumes:
+      - ./docker/certs/server.crt:/etc/ssl/server.crt:ro
+      - ./dockerr/certs/server.key:/etc/ssl/server.key:ro
+      - ./docker/conf/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./docker/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
