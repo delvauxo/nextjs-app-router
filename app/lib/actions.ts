@@ -126,7 +126,6 @@ export async function authenticate(
                     return 'Something went wrong.';
             }
         }
-        console.error('Unexpected error during authentication:', error);
-        return 'An unexpected error occurred. Please try again later.';
+        throw error;
     }
 }

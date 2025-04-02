@@ -20,13 +20,16 @@ async function getUser(email: string): Promise<User | undefined> {
 
 export const { auth, signIn, signOut } = NextAuth({
     ...authConfig,
-
     providers: [
         Credentials({
             async authorize(credentials) {
-                const parsedCredentials = z
-                    .object({ email: z.string().email(), password: z.string().min(6) })
-                    .safeParse(credentials);
+                const credentialsSchema = z.object({
+                    email: z.string().email(),
+                    password: z.string().min(1),
+                });
+
+                const parsedCredentials = credentialsSchema.safeParse(credentials);
+
                 if (parsedCredentials.success) {
                     const { email, password } = parsedCredentials.data;
                     const user = await getUser(email);
@@ -35,6 +38,7 @@ export const { auth, signIn, signOut } = NextAuth({
 
                     if (passwordsMatch) return user;
                 }
+
                 console.log('Invalid credentials');
                 return null;
             },
