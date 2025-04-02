@@ -5,7 +5,7 @@ export default NextAuth({
     providers: [
         KeycloakProvider({
             clientId: "nextjs-app",
-            clientSecret: "ac3QVt2vUwHtpGFzYhBb31eYbVn6Cz4H", // Replace with your Keycloak client secret
+            clientSecret: "e20Y5FZIZ9Gq5XEf5oiYzz3BBTvoMXCN", // Replace with your Keycloak client secret
             issuer: "http://localhost:8080/realms/nextjs-dashboard",
         }),
     ],
