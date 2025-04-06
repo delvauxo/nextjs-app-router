@@ -11,6 +11,7 @@ import { useState } from 'react';
 export default function Page() {
   const { data: session, status } = useSession();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const toggleDropdown = () => setDropdownOpen(!dropdownOpen);
 
   return (
     <main className="flex min-h-screen flex-col p-6">
@@ -30,13 +31,14 @@ export default function Page() {
           {status === "authenticated" ? (
             <div className="relative">
               <button
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-5 self-start rounded-lg bg-blue-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-400 md:text-base"
+                onClick={toggleDropdown}
+                className="flex items-center gap-2 rounded-lg bg-blue-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-400 md:text-base"
               >
-                <span>{session.user?.name || "User"}</span>
+                <span>{`${session.user?.name || ""}`.trim()}</span>
+                <ArrowRightIcon className="w-4 h-4" />
               </button>
               {dropdownOpen && (
-                <div className="absolute mt-2 w-48 rounded-md bg-white shadow-lg">
+                <div className="absolute mt-2 rounded-lg w-48 bg-white shadow-lg top-full">
                   <button
                     onClick={() => signOut()}
                     className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
@@ -48,15 +50,10 @@ export default function Page() {
             </div>
           ) : (
             <button
-              onClick={() =>
-                signIn("keycloak", {
-                  callbackUrl: "/", // Redirect to the home page after login
-                  prompt: "login", // Force Keycloak to show the login form
-                })
-              }
+              onClick={() => signIn("keycloak")}
               className="flex items-center gap-5 self-start rounded-lg bg-blue-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-400 md:text-base"
             >
-              <span>Log in</span> <ArrowRightIcon className="w-5 md:w-6" />
+              <span>Log in</span>
             </button>
           )}
         </div>
