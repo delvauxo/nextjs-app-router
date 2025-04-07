@@ -37,3 +37,6 @@ next-env.d.ts
 
 # Docker Certs
 /docker/certs
+
+# Qodo AI
+.qodo

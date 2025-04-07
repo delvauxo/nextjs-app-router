@@ -1,0 +1,36 @@
+
+# Structure Principale du Projet
+
+Ce document présente la structure principale du projet sous forme d'arbre, avec des commentaires pour expliquer le rôle de chaque dossier ou fichier.
+
+```
+Project Root
+├── package.json         # Fichier de configuration principal des dépendances et scripts
+├── tsconfig.json        # Configuration TypeScript
+├── node_modules/        # Répertoire contenant les dépendances installées (généré automatiquement)
+├── app/                 # Nouvelle organisation de Next.js avec le système de routage "app"
+│   ├── layout.tsx       # Layout global de l'application (structure commune)
+│   ├── page.tsx         # Point d'entrée de la page principale
+│   ├── lib/             # Bibliothèques et utilitaires partagés
+│   │   └── placeholder-data.ts  # Exemple d'utilitaire ou données factices
+│   └── ui/              # Composants UI spécifiques
+│       └── dashboard/   # Dossier pour les composants liés au tableau de bord
+│           └── revenue-chart.tsx  # Exemple de composant (graphique des revenus)
+├── pages/               # Ancien système de routage de Next.js (pour routes et API spécifiques)
+│   └── api/             # Endpoints API
+│       └── auth/        # Dossier d'authentification
+│           └── [...nextauth].ts  # Fichier de configuration de NextAuth (gestion des sessions et des providers)
+└── .next/               # Répertoire généré par Next.js lors du build (output du serveur, hot reloading, etc.)
+    ├── build-manifest.json        # Manifest du build (rendu côté serveur)
+    ├── app-build-manifest.json    # Manifest spécifique au dossier app
+    └── (autres fichiers générés)   # Fichiers supplémentaires pour le fonctionnement optimisé
+```
+
+## Explication
+
+- **Racine** : Les fichiers de configuration principaux se trouvent ici (package.json, tsconfig.json).
+- **app/** : Contient la nouvelle organisation de Next.js, avec des fichiers globaux comme layout.tsx et des composants UI.
+- **pages/** : Utilisé pour certaines routes ou pour les endpoints API, notamment pour l'authentification.
+- **.next/** : Dossier généré automatiquement lors du build avec tous les fichiers optimisés pour le rendu côté serveur et le développement.
+
+Vous pouvez utiliser cet aperçu pour naviguer dans le projet et comprendre rapidement son architecture.
