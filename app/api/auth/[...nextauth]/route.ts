@@ -9,15 +9,26 @@ const handler = NextAuth({
       issuer: process.env.KEYCLOAK_ISSUER,
     })
   ],
-  events: {
-    async signIn(message) { /* on successful sign in */ },
-    async signOut(message) { /* on signout */ },
-    async createUser(message) { /* user created */ },
-    async updateUser(message) { /* user updated - e.g. their email was verified */ },
-    async linkAccount(message) { /* account (e.g. Twitter) linked to a user */ },
-    async session(message) { /* session is active */ },
+  callbacks: {
+    async jwt({ token, account }) {
+      if (account?.id_token) {
+        token.id_token = account.id_token;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      session.id_token = token.id_token as string;
+      return session;
+    },
+    async redirect({ url, baseUrl }) {
+      // Si l'URL de redirection est incorrecte, on redirige vers la page d'accueil
+      if (url === 'undefined' || !url) {
+        return baseUrl; // Rediriger vers la page d'accueil si nécessaire
+      }
+      return url; // Utilise l'URL fournie
+    }
   },
-  // debug: true
+  secret: process.env.NEXTAUTH_SECRET,
 });
 
 export { handler as GET, handler as POST };
