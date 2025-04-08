@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
+import { ArrowRightIcon } from '@heroicons/react/20/solid';
 
 export default function LogoutButton() {
     const { data: session } = useSession();
@@ -28,9 +29,9 @@ export default function LogoutButton() {
     return (
         <button
             onClick={handleLogout}
-            className="px-4 py-2 bg-red-500 text-white rounded"
+            className="flex items-center w-full gap-5 self-start rounded-lg bg-red-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-red-400 md:text-base"
         >
-            Logout
+            <span className='w-full'>Log out</span> <ArrowRightIcon className="w-5 md:w-6" />
         </button>
     );
 }

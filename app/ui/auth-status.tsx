@@ -1,15 +1,15 @@
 "use client";
 
-import { useSession, signIn, signOut } from 'next-auth/react';
-import { ArrowRightIcon } from '@heroicons/react/20/solid';
+import { useSession } from 'next-auth/react';
+import LogoutButton from './LogoutButton';
+import LoginButton from './LoginButton';
 
 export default function AuthStatus() {
     // Utilise useSession pour récupérer l'état de la session
     const { data: session, status } = useSession();
 
-    // Vérifie l'état de la session
+    // Vérifie l'état de la session et affiche un message de chargement pendant que la session est en cours de récupération
     if (status === "loading") {
-        // Affiche un message de chargement pendant que la session est en cours de récupération
         return <div>Chargement...</div>;
     }
 
@@ -18,12 +18,8 @@ export default function AuthStatus() {
         return (
             <div className="flex flex-col justify-center gap-2 rounded-lg bg-gray-50 px-6">
                 <span className="mr-4">Vous n'êtes pas connecté.</span>
-                <button
-                    className="flex items-center w-full gap-5 self-start rounded-lg bg-blue-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-400 md:text-base"
-                    onClick={() => signIn('keycloak')}
-                >
-                    <span className='w-full'>Log in</span> <ArrowRightIcon className="w-5 md:w-6" />
-                </button>
+                {/* Affichage du bouton de connexion */}
+                <LoginButton />
             </div>
         );
     }
@@ -40,15 +36,11 @@ export default function AuthStatus() {
                     <strong>ID Token:</strong> {session.id_token}
                 </p>
             )}
-
-            <button
-                onClick={() => {
-                    signOut({ callbackUrl: "/" });
-                }}
-                className="flex items-center w-full gap-5 self-start rounded-lg bg-blue-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-400 md:text-base"
-            >
-                <span className='w-full'>Log out</span> <ArrowRightIcon className="w-5 md:w-6" />
-            </button>
+            {/* Affichage du bouton de déconnexion */}
+            <LogoutButton />
         </div>
     );
 }
+
+
+// className="flex items-center w-full gap-5 self-start rounded-lg bg-blue-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-400 md:text-base"
