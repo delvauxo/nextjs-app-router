@@ -67,3 +67,34 @@ export const generatePagination = (currentPage: number, totalPages: number) => {
     totalPages,
   ];
 };
+
+
+// ##############################################################
+// #############              PERSO.            #################
+// ##############################################################
+
+
+// Fonction utilitaire pour récupérer les rôles depuis l'ID Token
+export const getRolesFromToken = (idToken: string): string[] => {
+  try {
+    const decodedToken = JSON.parse(atob(idToken.split('.')[1]));  // Décoder la payload du JWT
+    return decodedToken?.resource_access?.parkigo?.roles || []; // Retourner les rôles ou une liste vide
+  } catch (error) {
+    console.error('Erreur de décodage du token:', error);
+    return [];
+  }
+};
+
+// Lire un JWT en TypeScript (sans le vérifier)
+export function decodeJWT(token: string) {
+  const [header, payload, signature] = token.split('.');
+
+  const decodedHeader = JSON.parse(atob(header));
+  const decodedPayload = JSON.parse(atob(payload));
+
+  return {
+    header: decodedHeader,
+    payload: decodedPayload,
+    signature: signature,
+  };
+}
