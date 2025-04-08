@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
-import { ArrowRightIcon } from '@heroicons/react/20/solid';
+import { PowerIcon } from '@heroicons/react/24/solid';
 
 export default function LogoutButton() {
     const { data: session } = useSession();
@@ -17,21 +17,22 @@ export default function LogoutButton() {
         const keycloakLogoutUrl = ``
             + `${process.env.NEXT_PUBLIC_KEYCLOAK_END_SESSION_URL}?`
             + `id_token_hint=${encodeURIComponent(session.id_token)}&`
-            + `post_logout_redirect_uri=${encodeURIComponent(window.location.origin + "/")}`;
+            + `post_logout_redirect_uri=${encodeURIComponent(process.env.NEXT_PUBLIC_NEXTAUTH_URL!)}`;
 
         // Redirection vers Keycloak pour déconnecter l'utilisateur côté serveur
         window.location.href = keycloakLogoutUrl;
 
-        // Déconnexion côté client (facultatif si tu veux nettoyer la session NextAuth immédiatement)
+        // Déconnexion côté client
         await signOut({ callbackUrl: "/" });
     };
 
     return (
         <button
             onClick={handleLogout}
-            className="flex items-center w-full gap-5 self-start rounded-lg bg-red-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-red-400 md:text-base"
+            className="flex h-[48px] w-full grow items-center justify-center gap-2 rounded-md bg-red-500 p-3 text-sm font-medium hover:bg-red-400 text-white md:flex-none md:justify-start md:p-2 md:px-3"
         >
-            <span className='w-full'>Log out</span> <ArrowRightIcon className="w-5 md:w-6" />
+            <PowerIcon className="w-6" />
+            <div className="hidden md:block">Sign Out</div>
         </button>
     );
 }

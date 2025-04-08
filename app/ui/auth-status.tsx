@@ -3,6 +3,8 @@
 import { useSession } from 'next-auth/react';
 import LogoutButton from './LogoutButton';
 import LoginButton from './LoginButton';
+import { ChartBarIcon } from '@heroicons/react/24/solid';
+import Link from 'next/link';
 
 export default function AuthStatus() {
     // Utilise useSession pour récupérer l'état de la session
@@ -36,11 +38,18 @@ export default function AuthStatus() {
                     <strong>ID Token:</strong> {session.id_token}
                 </p>
             )}
+
+            {/* Link - Dashboard */}
+            <Link
+                href="/dashboard"
+                className='flex h-[48px] w-full grow items-center justify-center gap-2 rounded-md bg-blue-500 p-3 text-sm font-medium hover:bg-blue-400 text-white md:flex-none md:justify-start md:p-2 md:px-3'
+            >
+                <ChartBarIcon className="w-6" />
+                <div className="hidden md:block">Dashboard</div>
+            </Link>
+
             {/* Affichage du bouton de déconnexion */}
             <LogoutButton />
         </div>
     );
 }
-
-
-// className="flex items-center w-full gap-5 self-start rounded-lg bg-blue-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-400 md:text-base"

@@ -5,7 +5,6 @@ import styles from '@/app/ui/home.module.css';
 import { lusitana } from '@/app/ui/fonts';
 import Image from 'next/image';
 import AuthStatus from './ui/auth-status';
-import LogoutButton from './ui/LogoutButton';
 
 export default function Page() {
 
