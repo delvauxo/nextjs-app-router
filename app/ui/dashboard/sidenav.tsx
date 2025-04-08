@@ -6,11 +6,13 @@ import AcmeLogo from '@/app/ui/acme-logo';
 import LogoutButton from '../LogoutButton';
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { ChevronUpIcon } from '@heroicons/react/24/solid';
-import { UserIcon } from '@heroicons/react/24/solid';
-import { Cog6ToothIcon } from '@heroicons/react/24/solid';
-import { CreditCardIcon } from '@heroicons/react/24/solid';
-import { ChatBubbleLeftEllipsisIcon } from '@heroicons/react/24/solid';
+import {
+  ChevronUpIcon,
+  UserIcon,
+  Cog6ToothIcon,
+  CreditCardIcon,
+  ChatBubbleLeftEllipsisIcon
+} from '@heroicons/react/24/solid';
 
 export default function SideNav() {
   const { data: session, status } = useSession();
