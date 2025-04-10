@@ -26,8 +26,9 @@ export default function AuthStatus() {
 
     // Accéder directement à l'ID Token de la session
     const idToken = session.id_token;
-    const roles = idToken ? getRolesFromToken(idToken) : [];
-    const firstRole = roles.length > 0 ? roles[0] : 'Aucun rôle attribué';
+    const role = idToken ? getRolesFromToken(idToken) : [];
+    const firstRole = role.find(role => role.startsWith('dashboard_')) || ''; // Changed ':' to '||'
+    const dashboardPrefix = firstRole ? firstRole.split('_')[1] : 'guest'; // 'owner' ou 'renter', ou 'guest' si aucun rôle n'est trouvé
 
     // Si l'utilisateur est connecté, on affiche ses informations
     return (
@@ -43,9 +44,9 @@ export default function AuthStatus() {
             )}
 
             {/* Link - Dashboard, avec un lien dynamique basé sur le premier rôle */}
-            {roles.length > 0 ? (
+            {role.length > 0 ? (
                 <Link
-                    href={`/${firstRole}/dashboard`}
+                    href={`/${dashboardPrefix}/dashboard`}
                     className='flex items-center w-full gap-5 self-start rounded-lg bg-blue-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-400 md:text-base'
                 >
                     <ChartBarIcon className="w-5 md:w-6" /><span>Dashboard</span>

@@ -1,30 +1,14 @@
-"use client";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/authOptions";
+import { redirect } from "next/navigation";
+import SideNav from "@/app/ui/dashboard/sidenav";
 
-import { useSession, signIn } from "next-auth/react";
-import { useEffect } from "react";
-import SideNav from '@/app/ui/dashboard/sidenav';
-
-export default function Layout({ children }: { children: React.ReactNode; }) {
-
-
-    // Can't access Dashboard if not authenticated
-    // START ----
-    const { data: session, status } = useSession();
-
-    useEffect(() => {
-        if (status === "unauthenticated") {
-            signIn('keycloak'); // Redirect to the Keycloak login page if not authenticated
-        }
-    }, [status]);
-
-    if (status === "loading") {
-        return <p>Loading...</p>; // Show a loading state while checking authentication
-    }
+export default async function Layout({ children }: { children: React.ReactNode; }) {
+    const session = await getServerSession(authOptions);
 
     if (!session) {
-        return null; // Prevent rendering if unauthenticated
+        redirect('/api/auth/signin');
     }
-    // END ----
 
     return (
         <div className="flex h-screen flex-col md:flex-row md:overflow-hidden">
