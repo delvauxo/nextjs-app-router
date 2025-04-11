@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   postgres:
     image: postgres:latest
@@ -9,10 +11,32 @@ services:
       POSTGRES_DB: yolo
     ports:
       - "5432:5432"
-    # CHANGE PATH WHEN MOVING FOLDER IN A PARENT DIRECTORY
     volumes:
       - ./docker/certs/server.crt:/etc/ssl/server.crt:ro
       - ./docker/certs/server.key:/etc/ssl/server.key:ro
       - ./docker/conf/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./docker/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - pgdata:/var/lib/postgresql/data
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    restart: always
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: yolo
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres
+      KC_DB_PORT: 5432
+      KC_DB_URL_DATABASE: keycloak
+      KC_DB_USERNAME: delvauxo
+      KC_DB_PASSWORD: yolo
+    ports:
+      - "8080:8080"
+    command: start-dev
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:

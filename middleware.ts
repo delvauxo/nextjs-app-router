@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
-import { checkRole } from '@/app/lib/utils';  // Importer la fonction utilitaire
+import { checkRole } from '@/app/lib/utils';
 
 export async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
