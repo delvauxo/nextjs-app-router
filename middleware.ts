@@ -1,34 +1,25 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { getToken } from 'next-auth/jwt';
-import { getRolesFromToken } from '@/app/lib/utils';
+import { NextRequest } from 'next/server';
+import { checkRole } from '@/app/lib/utils';  // Importer la fonction utilitaire
 
-// Middleware exécuté pour chaque requête sur /owner/* et /renter/*
 export async function middleware(request: NextRequest) {
-    const token = await getToken({ req: request });
-
-    // Redirige vers l'authentification si l'utilisateur n'est pas authentifié
-    if (!token) {
-        return NextResponse.redirect(new URL('/api/auth/signin', request.url));
-    }
-
-    const roles = getRolesFromToken(token.id_token!) || [];
     const pathname = request.nextUrl.pathname;
 
-    // Accès à /owner, mais sans rôle adéquat
-    if (pathname.startsWith('/owner') && !roles.includes('dashboard_owner')) {
-        return NextResponse.redirect(new URL('/unauthorized', request.url));
+    // Vérifier les rôles pour le dashboard "owner"
+    if (pathname.startsWith('/owner')) {
+        const response = await checkRole(request, 'dashboard_owner', '/owner');
+        if (response) return response;
     }
 
-    // Accès à /renter, mais sans rôle adéquat
-    if (pathname.startsWith('/renter') && !roles.includes('dashboard_renter')) {
-        return NextResponse.redirect(new URL('/unauthorized', request.url));
+    // Vérifier les rôles pour le dashboard "renter"
+    if (pathname.startsWith('/renter')) {
+        const response = await checkRole(request, 'dashboard_renter', '/renter');
+        if (response) return response;
     }
 
     return NextResponse.next();
 }
 
-// Routes sur lesquelles le middleware s'applique
 export const config = {
     matcher: [
         '/owner/:path*',
