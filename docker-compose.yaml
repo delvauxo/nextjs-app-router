@@ -1,4 +1,9 @@
+networks:
+  openfga:
+    driver: bridge
+
 services:
+  # Service PostgreSQL avec healthcheck ajouté
   postgres:
     image: postgres:latest
     container_name: postgres_ssl
@@ -17,7 +22,16 @@ services:
       - ./docker/init:/docker-entrypoint-initdb.d
       - pgdata-postgres:/var/lib/postgresql/data
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    networks:
+      - openfga
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "delvauxo", "-d", "yolo"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+      start_period: 30s
 
+  # Service Keycloak existant
   keycloak:
     image: quay.io/keycloak/keycloak:latest
     container_name: keycloak
@@ -38,7 +52,62 @@ services:
       - postgres
     volumes:
       - keycloak-data:/opt/keycloak/data
+    networks:
+      - openfga
+
+  # Service de migration pour OpenFGA
+  migrate:
+    image: openfga/openfga:latest
+    container_name: migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: migrate
+    environment:
+      - OPENFGA_DATASTORE_ENGINE=postgres
+      - OPENFGA_DATASTORE_URI=postgres://delvauxo:yolo@postgres:5432/yolo?sslmode=disable
+    networks:
+      - openfga
+
+  # Service OpenFGA
+  openfga:
+    image: openfga/openfga:latest
+    container_name: openfga
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      - OPENFGA_DATASTORE_ENGINE=postgres
+      - OPENFGA_DATASTORE_URI=postgres://delvauxo:yolo@postgres:5432/yolo?sslmode=disable
+      - OPENFGA_LOG_FORMAT=json
+    command: run
+    networks:
+      - openfga
+    ports:
+      # HTTP server
+      - "8080:8080"
+      # gRPC server
+      - "8083:8081"
+      # Playground (modifié ici pour ne pas entrer en conflit avec Next.js)
+      - "3001:3000"
+    volumes:
+      - openfga-data:/var/lib/openfga
+
+  # Service FastAPI
+  fastapi:
+    image: tiangolo/uvicorn-gunicorn-fastapi:latest
+    container_name: fastapi
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://delvauxo:yolo@postgres:5432/yolo
+    ports:
+      - "8000:80"
+    depends_on:
+      - postgres
+    networks:
+      - openfga
 
 volumes:
   pgdata-postgres:
   keycloak-data:
+  openfga-data:
