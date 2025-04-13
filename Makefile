@@ -13,6 +13,10 @@ up:
 down:
 	$(DOCKER_COMPOSE) down
 
+# Commande pour arrêter les services et supprimer les volumes existants
+down-v:
+	$(DOCKER_COMPOSE) down -v
+
 # Commande pour vérifier les logs de Keycloak
 logs-keycloak:
 	$(DOCKER_COMPOSE) logs -f keycloak

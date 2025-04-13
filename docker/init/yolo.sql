@@ -1,11 +1,3 @@
--- -- -- -- -- -- -- --
--- Connect to the DB :
--- pgcli -h localhost -p 5432 -U delvauxo -d yolo
--- -- -- -- -- -- -- --
--- Running this script :
--- \i path/to/script.sql
--- -- -- -- -- -- -- --
-
 -- Extension UUID
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 

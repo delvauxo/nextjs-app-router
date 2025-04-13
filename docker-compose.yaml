@@ -1,113 +1,106 @@
 networks:
   openfga:
-    driver: bridge
+    driver: bridge  # Réseau Docker personnalisé pour connecter tous les services entre eux
 
 services:
-  # Service PostgreSQL avec healthcheck ajouté
-  postgres:
-    image: postgres:latest
-    container_name: postgres_ssl
-    restart: always
-    environment:
-      POSTGRES_USER: delvauxo
-      POSTGRES_PASSWORD: yolo
-      POSTGRES_DB: yolo
-    ports:
-      - "5432:5432"
-    volumes:
-      - ./docker/certs/server.crt:/etc/ssl/server.crt:ro
-      - ./docker/certs/server.key:/etc/ssl/server.key:ro
-      - ./docker/conf/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./docker/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
-      - ./docker/init:/docker-entrypoint-initdb.d
-      - pgdata-postgres:/var/lib/postgresql/data
-    command: postgres -c config_file=/etc/postgresql/postgresql.conf
-    networks:
-      - openfga
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "delvauxo", "-d", "yolo"]
-      interval: 10s
-      retries: 5
-      timeout: 5s
-      start_period: 30s
 
-  # Service Keycloak existant
+  postgres:
+    image: postgres:latest  # Utilise la dernière image officielle de PostgreSQL
+    container_name: postgres_ssl  # Nom personnalisé du conteneur
+    restart: always  # Redémarre automatiquement le conteneur en cas d'arrêt
+    environment:
+      POSTGRES_USER: delvauxo  # Nom d'utilisateur PostgreSQL par défaut
+      POSTGRES_PASSWORD: yolo  # Mot de passe PostgreSQL
+      POSTGRES_DB: yolo  # Base de données initiale
+    ports:
+      - "5432:5432"  # Expose le port PostgreSQL pour accès local
+    volumes:
+      - ./docker/certs/server.crt:/etc/ssl/server.crt:ro  # Certificat SSL pour connexion sécurisée
+      - ./docker/certs/server.key:/etc/ssl/server.key:ro  # Clé SSL privée
+      - ./docker/conf/postgresql.conf:/etc/postgresql/postgresql.conf:ro  # Fichier de config PostgreSQL personnalisé
+      - ./docker/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro  # Contrôle les méthodes d’authentification des clients
+      - ./docker/init/init.sql:/docker-entrypoint-initdb.d/init.sql:ro  # Script d'initialisation SQL
+      - ./docker/init/yolo.sql:/docker-entrypoint-initdb.d/yolo.sql:ro  # Second script d'initialisation
+      - pgdata-postgres:/var/lib/postgresql/data  # Volume persistant des données PostgreSQL
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf  # Lancement avec fichier de config custom
+    networks:
+      - openfga  # Connecté au réseau openfga
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "delvauxo", "-d", "yolo"]  # Vérifie que la DB est prête
+      interval: 10s  # Fréquence de vérification
+      retries: 5  # Nombre de tentatives avant échec
+      timeout: 5s  # Timeout d'une tentative
+      start_period: 30s  # Délai initial avant début des vérifications
+
   keycloak:
-    image: quay.io/keycloak/keycloak:latest
-    container_name: keycloak
+    image: quay.io/keycloak/keycloak:latest  # Image officielle de Keycloak (gestion d'identité)
+    container_name: keycloak  # Nom du conteneur
     restart: always
     environment:
-      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN: admin  # Identifiants admin pour initialisation
       KEYCLOAK_ADMIN_PASSWORD: yolo
-      KC_DB: postgres
-      KC_DB_URL_HOST: postgres
+      KEYCLOAK_DATABASE_NAME: keycloak  # Nom logique de la base Keycloak
+      KC_DB: postgres  # Moteur de base de données utilisé
+      KC_DB_URL_HOST: postgres  # Hôte DB (référence au conteneur postgres)
       KC_DB_PORT: 5432
-      KC_DB_URL_DATABASE: keycloak
+      KC_DB_URL_DATABASE: keycloak  # Nom réel de la base (à créer)
       KC_DB_USERNAME: delvauxo
       KC_DB_PASSWORD: yolo
     ports:
-      - "8081:8080"
-    command: start-dev
+      - "8081:8080"  # Accès Keycloak via localhost:8081
+    command: start-dev  # Mode développement (plus rapide, pas pour prod)
     depends_on:
-      - postgres
+      - postgres  # Attente de démarrage du service PostgreSQL
     volumes:
-      - keycloak-data:/opt/keycloak/data
+      - keycloak-data:/opt/keycloak/data  # Volume pour les données persistantes Keycloak
     networks:
       - openfga
 
-  # Service de migration pour OpenFGA
   migrate:
-    image: openfga/openfga:latest
-    container_name: migrate
+    image: openfga/openfga:latest  # Image OpenFGA officielle
+    container_name: migrate  # Conteneur temporaire pour exécuter la migration
     depends_on:
       postgres:
-        condition: service_healthy
-    command: migrate
+        condition: service_healthy  # Attend que PostgreSQL soit prêt (via healthcheck)
+    command: migrate  # Lance la migration (création des tables OpenFGA)
     environment:
-      - OPENFGA_DATASTORE_ENGINE=postgres
-      - OPENFGA_DATASTORE_URI=postgres://delvauxo:yolo@postgres:5432/yolo?sslmode=disable
+      - OPENFGA_DATASTORE_ENGINE=postgres  # Utilise PostgreSQL comme backend
+      - OPENFGA_DATASTORE_URI=postgres://delvauxo:yolo@postgres:5432/openfga  # URI de connexion à la base openfga (à créer)
     networks:
       - openfga
 
-  # Service OpenFGA
   openfga:
-    image: openfga/openfga:latest
+    image: openfga/openfga:latest  # Serveur OpenFGA
     container_name: openfga
     depends_on:
       migrate:
-        condition: service_completed_successfully
+        condition: service_completed_successfully  # Lance OpenFGA seulement si les migrations ont réussi
     environment:
       - OPENFGA_DATASTORE_ENGINE=postgres
-      - OPENFGA_DATASTORE_URI=postgres://delvauxo:yolo@postgres:5432/yolo?sslmode=disable
-      - OPENFGA_LOG_FORMAT=json
-    command: run
+      - OPENFGA_DATASTORE_URI=postgres://delvauxo:yolo@postgres:5432/openfga  # Connexion à la DB OpenFGA
+      - OPENFGA_LOG_FORMAT=json  # Format des logs en JSON (meilleur pour l'observabilité)
+    command: run  # Démarre le serveur OpenFGA
+    ports:
+      - "8080:8080"  # Port principal de l’API OpenFGA
+      - "8083:8081"  # Port secondaire (gRPC ou metrics selon config)
+      - "3001:3000"  # Interface ou debug (selon config)
+    volumes:
+      - openfga-data:/var/lib/openfga  # Volume persistant pour OpenFGA
     networks:
       - openfga
-    ports:
-      # HTTP server
-      - "8080:8080"
-      # gRPC server
-      - "8083:8081"
-      # Playground (modifié ici pour ne pas entrer en conflit avec Next.js)
-      - "3001:3000"
-    volumes:
-      - openfga-data:/var/lib/openfga
 
-  # Service FastAPI
   fastapi:
-    image: tiangolo/uvicorn-gunicorn-fastapi:latest
+    image: tiangolo/uvicorn-gunicorn-fastapi:latest  # Image officielle pour FastAPI avec Gunicorn et Uvicorn
     container_name: fastapi
     restart: always
-    environment:
-      - DATABASE_URL=postgresql://delvauxo:yolo@postgres:5432/yolo
     ports:
-      - "8000:80"
+      - "8000:80"  # Expose FastAPI en local via http://localhost:8000
     depends_on:
-      - postgres
+      - postgres  # Attente que PostgreSQL soit dispo (pas forcément "healthy")
     networks:
-      - openfga
+      - openfga  # Connecté au réseau pour pouvoir discuter avec les autres services
 
 volumes:
-  pgdata-postgres:
-  keycloak-data:
-  openfga-data:
+  pgdata-postgres:  # Volume persistant pour PostgreSQL
+  keycloak-data:  # Volume persistant pour Keycloak
+  openfga-data:  # Volume persistant pour OpenFGA
