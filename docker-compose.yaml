@@ -33,12 +33,12 @@ services:
       start_period: 30s  # Délai initial avant début des vérifications
 
   keycloak:
-    image: quay.io/keycloak/keycloak:latest  # Image officielle de Keycloak (gestion d'identité)
+    image: quay.io/keycloak/keycloak:latest   # Image officielle de Keycloak (gestion d'identité)
     container_name: keycloak  # Nom du conteneur
     restart: always
     environment:
-      KEYCLOAK_ADMIN: admin  # Identifiants admin pour initialisation
-      KEYCLOAK_ADMIN_PASSWORD: yolo
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin  # Identifiants admin pour initialisation
+      KC_BOOTSTRAP_ADMIN_PASSWORD: yolo
       KEYCLOAK_DATABASE_NAME: keycloak  # Nom logique de la base Keycloak
       KC_DB: postgres  # Moteur de base de données utilisé
       KC_DB_URL_HOST: postgres  # Hôte DB (référence au conteneur postgres)
@@ -46,13 +46,15 @@ services:
       KC_DB_URL_DATABASE: keycloak  # Nom réel de la base (à créer)
       KC_DB_USERNAME: delvauxo
       KC_DB_PASSWORD: yolo
+      KEYCLOAK_IMPORT: /opt/keycloak/data/import/keycloak-init.json  # Charge la config Keycloak (realm, client, users) au démarrage
     ports:
       - "8081:8080"  # Accès Keycloak via localhost:8081
-    command: start-dev  # Mode développement (plus rapide, pas pour prod)
+    command: start-dev --import-realm # Mode développement (plus rapide, pas pour prod)
     depends_on:
       - postgres  # Attente de démarrage du service PostgreSQL
     volumes:
       - keycloak-data:/opt/keycloak/data  # Volume pour les données persistantes Keycloak
+      - ./docker/init/keycloak-init.json:/opt/keycloak/data/import/keycloak-init.json:ro  # Monte le fichier de config Keycloak dans le conteneur
     networks:
       - openfga
 

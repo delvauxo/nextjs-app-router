@@ -27,7 +27,7 @@ export default function AuthStatus() {
     // Accéder directement à l'ID Token de la session
     const idToken = session.id_token;
     const role = idToken ? getRolesFromToken(idToken) : [];
-    const firstRole = role.find(role => role.startsWith('dashboard_')) || ''; // Changed ':' to '||'
+    const firstRole = role.find(role => role.startsWith('dashboard_')) || '';
     const dashboardPrefix = firstRole ? firstRole.split('_')[1] : 'guest'; // 'owner' ou 'renter', ou 'guest' si aucun rôle n'est trouvé
 
     // Si l'utilisateur est connecté, on affiche ses informations

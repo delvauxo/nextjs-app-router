@@ -1,0 +1,98 @@
+{
+  "realm": "nextjs-dashboard",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "parkigo",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "adminUrl": "http://localhost:3000",
+      "rootUrl": "http://localhost:3000",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "secret": "EizZfQy12vFin9Nzty0ro6tGQockUbBl",
+      "protocolMappers": [
+        {
+          "name": "client roles in id token",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "clientId": "parkigo"
+          }
+        }
+      ]
+    }
+  ],
+  "roles": {
+    "client": {
+      "parkigo": [
+        {
+          "name": "dashboard_owner",
+          "description": "Role for Dashboard Owners in Parkigo client"
+        },
+        {
+          "name": "dashboard_renter",
+          "description": "Role for Dashboard Renters in Parkigo client"
+        }
+      ]
+    }
+  },
+  "users": [
+    {
+      "username": "owner",
+      "email": "owner@parkigo.be",
+      "firstName": "Owner",
+      "lastName": "ParkiGo",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "yolo",
+          "temporary": false
+        }
+      ],
+      "clientRoles": {
+        "parkigo": [
+          "dashboard_owner"
+        ]
+      }
+    },
+    {
+      "username": "renter",
+      "email": "renter@parkigo.be",
+      "firstName": "Renter",
+      "lastName": "ParkiGo",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "yolo",
+          "temporary": false
+        }
+      ],
+      "clientRoles": {
+        "parkigo": [
+          "dashboard_renter"
+        ]
+      }
+    }
+  ]
+}
