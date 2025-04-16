@@ -18,6 +18,7 @@ export default async function RevenueChart() {
     return <p className="mt-4 text-gray-400">No data available.</p>;
   }
 
+  // Rendu du graphique
   return (
     <div className="w-full md:col-span-4">
       <h2 className={`${lusitana.className} mb-4 text-xl md:text-2xl`}>
@@ -34,7 +35,7 @@ export default async function RevenueChart() {
             ))}
           </div>
 
-          {revenue.map((month) => (
+          {revenue.map((month: { month: string; revenue: number; }) => (
             <div key={month.month} className="flex flex-col items-center gap-2">
               <div
                 className="w-full rounded-md bg-blue-300"

@@ -99,6 +99,10 @@ services:
       - "8000:80"  # Expose FastAPI en local via http://localhost:8000
     depends_on:
       - postgres  # Attente que PostgreSQL soit dispo (pas forcément "healthy")
+    volumes:
+      - ../fastapi:/app  # Monte le dossier du projet FastAPI dans le conteneur
+      - ../fastapi/requirements.txt:/app/requirements.txt  # Monte le fichier requirements.txt
+    command: /bin/bash -c "pip install -r /app/requirements.txt && gunicorn -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:80 app.main:app"
     networks:
       - openfga  # Connecté au réseau pour pouvoir discuter avec les autres services
 

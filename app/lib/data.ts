@@ -1,4 +1,5 @@
 import postgres from 'postgres';
+import axios from "axios";
 import {
   CustomerField,
   CustomersTableType,
@@ -8,20 +9,15 @@ import {
   Revenue,
 } from './definitions';
 import { formatCurrency } from './utils';
-import { log } from 'console';
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
 export async function fetchRevenue() {
   try {
-    console.log('Fetching revenue data...');
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    const data = await sql<Revenue[]>`SELECT * FROM revenue`;
-    console.log('Data fetch completed after 3 seconds.');
-    return data;
+    const response = await axios.get(`${process.env.API_BASE_URL}/revenue/`);
+    return response.data;
   } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch revenue data.');
+    throw new Error("Failed to fetch revenue data.");
   }
 }
 
