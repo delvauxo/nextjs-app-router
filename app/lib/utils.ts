@@ -1,6 +1,8 @@
 import { Revenue } from './definitions';
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/authOptions";
 
 export const formatCurrency = (amount: number) => {
   return (amount / 100).toLocaleString('en-US', {
@@ -123,4 +125,17 @@ export async function checkRole(
   }
 
   return NextResponse.next();
+}
+
+export async function getDashboardPrefix(): Promise<string> {
+  const session = await getServerSession(authOptions);
+  const idToken = session?.id_token;
+
+  if (!idToken) {
+    return "guest"; // Default role
+  }
+
+  const roles = getRolesFromToken(idToken);
+  const firstRole = roles.find((role) => role.startsWith("dashboard_"));
+  return firstRole ? firstRole.split("_")[1] : "guest";
 }
