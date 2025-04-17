@@ -4,7 +4,6 @@ import z from "zod";
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import postgres from 'postgres';
-import { getDashboardPrefix } from "./utils";
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
@@ -67,11 +66,9 @@ export async function createInvoice(prevState: State, formData: FormData) {
         };
     }
 
-    const dashboardPrefix = await getDashboardPrefix();
-
     // Revalidate the cache for the invoices page and redirect the user.
-    revalidatePath(`/${dashboardPrefix}/dashboard/invoices`);
-    redirect(`/${dashboardPrefix}/dashboard/invoices`);
+    revalidatePath(`/owner/dashboard/invoices`);
+    redirect(`/owner/dashboard/invoices`);
 }
 
 export async function updateInvoice(
@@ -105,16 +102,12 @@ export async function updateInvoice(
         return { message: 'Database Error: Failed to Update Invoice.' };
     }
 
-    const dashboardPrefix = await getDashboardPrefix();
-
-    revalidatePath(`/${dashboardPrefix}/dashboard/invoices`);
-    redirect(`/${dashboardPrefix}/dashboard/invoices`);
+    revalidatePath(`/owner/dashboard/invoices`);
+    redirect(`/owner/dashboard/invoices`);
 }
 
 export async function deleteInvoice(id: string) {
     await sql`DELETE FROM invoices WHERE id = ${id}`;
 
-    const dashboardPrefix = await getDashboardPrefix();
-
-    revalidatePath(`/${dashboardPrefix}/dashboard/invoices`);
+    revalidatePath(`/owner/dashboard/invoices`);
 }

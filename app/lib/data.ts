@@ -1,14 +1,12 @@
 import postgres from 'postgres';
 import axios from "axios";
+import { formatCurrency } from './utils';
 import {
   CustomerField,
   CustomersTableType,
   InvoiceForm,
   InvoicesTable,
-  LatestInvoiceRaw,
-  Revenue,
 } from './definitions';
-import { formatCurrency } from './utils';
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
@@ -23,22 +21,17 @@ export async function fetchRevenue() {
 
 export async function fetchLatestInvoices() {
   try {
-    const data = await sql<LatestInvoiceRaw[]>`
-      SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id, invoices.date
-      FROM invoices
-      JOIN customers ON invoices.customer_id = customers.id
-      ORDER BY invoices.date DESC
-      LIMIT 5`;
-
-    const latestInvoices = data.map((invoice) => ({
+    const response = await axios.get(`${process.env.API_BASE_URL}/invoices/latest`);
+    // Appliquer le formatage du montant et la date à chaque facture
+    const formattedInvoices = response.data.map((invoice: any) => ({
       ...invoice,
       amount: formatCurrency(invoice.amount),
-      date: new Date(invoice.date).toLocaleDateString('fr-FR'),
+      date: new Date(invoice.date).toLocaleDateString('fr-FR')
     }));
-    return latestInvoices;
+    return formattedInvoices;
   } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch the latest invoices.');
+    console.error("Failed to fetch the latest invoices:", error);
+    return [];
   }
 }
 
