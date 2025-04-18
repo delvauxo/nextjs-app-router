@@ -10,6 +10,7 @@ import {
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
+// Récupère les données de revenu depuis l'API.
 export async function fetchRevenue() {
   try {
     const response = await axios.get(`${process.env.API_BASE_URL}/revenue/`);
@@ -19,6 +20,7 @@ export async function fetchRevenue() {
   }
 }
 
+// Récupère et formate les dernières factures (montant et date) depuis l'API.
 export async function fetchLatestInvoices() {
   try {
     const response = await axios.get(`${process.env.API_BASE_URL}/invoices/latest`);
@@ -35,17 +37,19 @@ export async function fetchLatestInvoices() {
   }
 }
 
+// Récupère en parallèle le nombre de factures, le nombre de clients et les montants des factures (paid et pending) depuis l'API.
 export async function fetchCardData() {
   try {
-    // You can probably combine these into a single SQL query
-    // However, we are intentionally splitting them to demonstrate
-    // how to initialize multiple queries in parallel with JS.
-    const invoiceCountPromise = sql`SELECT COUNT(*) FROM invoices`;
-    const customerCountPromise = sql`SELECT COUNT(*) FROM customers`;
-    const invoiceStatusPromise = sql`SELECT
-         SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS "paid",
-         SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) AS "pending"
-         FROM invoices`;
+    const invoiceCountPromise = axios
+      .get(`${process.env.API_BASE_URL}/invoices/count`)
+      .then(response => response.data.count);
+    const customerCountPromise = axios
+      .get(`${process.env.API_BASE_URL}/customers/count`)
+      .then(response => response.data.count);
+    const invoiceStatusPromise = axios
+      .get(`${process.env.API_BASE_URL}/invoices/status`)
+      .then(response => ({ paid: response.data.paid, pending: response.data.pending }));
+
 
     const data = await Promise.all([
       invoiceCountPromise,
@@ -53,14 +57,14 @@ export async function fetchCardData() {
       invoiceStatusPromise,
     ]);
 
-    const numberOfInvoices = Number(data[0][0].count ?? '0');
-    const numberOfCustomers = Number(data[1][0].count ?? '0');
-    const totalPaidInvoices = formatCurrency(data[2][0].paid ?? '0');
-    const totalPendingInvoices = formatCurrency(data[2][0].pending ?? '0');
+    const numberOfInvoices = Number(data[0] ?? '0');
+    const numberOfCustomers = Number(data[1] ?? '0');
+    const totalPaidInvoices = formatCurrency(data[2].paid ?? '0');
+    const totalPendingInvoices = formatCurrency(data[2].pending ?? '0');
 
     return {
-      numberOfCustomers,
       numberOfInvoices,
+      numberOfCustomers,
       totalPaidInvoices,
       totalPendingInvoices,
     };
