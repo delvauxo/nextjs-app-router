@@ -50,7 +50,6 @@ export async function fetchCardData() {
       .get(`${process.env.API_BASE_URL}/invoices/status`)
       .then(response => ({ paid: response.data.paid, pending: response.data.pending }));
 
-
     const data = await Promise.all([
       invoiceCountPromise,
       customerCountPromise,
