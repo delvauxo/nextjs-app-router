@@ -84,11 +84,6 @@ export async function fetchFilteredInvoices(query: string, currentPage: number):
       },
     });
 
-    // Si la réponse est un tableau vide
-    if (Array.isArray(response.data) && response.data.length === 0) {
-      console.log(`Aucun résultat trouvé pour la recherche "${query}".`);
-    }
-
     return response.data as InvoicesTable[];
   } catch (error) {
     console.error("Error fetching filtered invoices:", error);
