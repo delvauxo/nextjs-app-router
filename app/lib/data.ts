@@ -76,7 +76,6 @@ export async function fetchCardData() {
 // Doit correspondre au nombre d'item par page côté backend pour ne pas créer de désalignement.
 const ITEMS_PER_PAGE = 6;
 
-
 // Récupère les factures filtrées basée sur la query de la search-bar depuis l'API.
 export async function fetchFilteredInvoices(query: string, currentPage: number): Promise<InvoicesTable[]> {
   try {
@@ -95,6 +94,7 @@ export async function fetchFilteredInvoices(query: string, currentPage: number):
   }
 }
 
+// Récupère le nombre total de pages basé sur la recherche depuis l'API.
 export async function fetchInvoicesPages(query: string): Promise<number> {
   try {
     const response = await axios.get(`${process.env.API_BASE_URL}/invoices/pages`, {
@@ -106,32 +106,30 @@ export async function fetchInvoicesPages(query: string): Promise<number> {
   }
 }
 
-
+// Récupère une facture spécifique par son identifiant depuis l'API.
 export async function fetchInvoiceById(id: string) {
   try {
-    const data = await sql<InvoiceForm[]>`
-      SELECT
-        invoices.id,
-        invoices.customer_id,
-        invoices.amount,
-        invoices.status
-      FROM invoices
-      WHERE invoices.id = ${id};
-    `;
+    const response = await axios.get(`${process.env.API_BASE_URL}/invoices/${id}`);
 
-    const invoice = data.map((invoice) => ({
-      ...invoice,
-      // Convert amount from cents to dollars
-      amount: invoice.amount / 100,
-    }));
+    if (!response.data) {
+      throw new Error(`Invoice with ID ${id} not found.`);
+    }
 
-    return invoice[0];
+    const invoice = {
+      ...response.data,
+      amount: response.data.amount / 100
+    };
+
+
+
+    return invoice;
   } catch (error) {
-    console.error('Database Error:', error);
+    console.error(`Error fetching invoice ${id}:`, error);
     throw new Error('Failed to fetch invoice.');
   }
 }
 
+// Récupère la liste complète des clients depuis la base de données.
 export async function fetchCustomers() {
   try {
     const customers = await sql<CustomerField[]>`
@@ -149,6 +147,7 @@ export async function fetchCustomers() {
   }
 }
 
+// Récupère les clients filtrés en fonction de la recherche depuis la base de données.
 export async function fetchFilteredCustomers(query: string) {
   try {
     const data = await sql<CustomersTableType[]>`
@@ -182,6 +181,7 @@ export async function fetchFilteredCustomers(query: string) {
   }
 }
 
+// Récupère le nombre total de pages pour les clients filtrés depuis la base de données.
 export async function fetchCustomersPages(query: string) {
   try {
     const totalCustomers = await sql`
