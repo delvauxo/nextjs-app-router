@@ -73,7 +73,11 @@ export async function fetchCardData() {
   }
 }
 
+// Doit correspondre au nombre d'item par page côté backend pour ne pas créer de désalignement.
 const ITEMS_PER_PAGE = 6;
+
+
+// Récupère les factures filtrées basée sur la query de la search-bar depuis l'API.
 export async function fetchFilteredInvoices(query: string, currentPage: number): Promise<InvoicesTable[]> {
   try {
     const response = await axios.get(`${process.env.API_BASE_URL}/invoices`, {
@@ -91,26 +95,17 @@ export async function fetchFilteredInvoices(query: string, currentPage: number):
   }
 }
 
-export async function fetchInvoicesPages(query: string) {
+export async function fetchInvoicesPages(query: string): Promise<number> {
   try {
-    const data = await sql`SELECT COUNT(*)
-    FROM invoices
-    JOIN customers ON invoices.customer_id = customers.id
-    WHERE
-      customers.name ILIKE ${`%${query}%`} OR
-      customers.email ILIKE ${`%${query}%`} OR
-      invoices.amount::text ILIKE ${`%${query}%`} OR
-      invoices.date::text ILIKE ${`%${query}%`} OR
-      invoices.status ILIKE ${`%${query}%`}
-  `;
-
-    const totalPages = Math.ceil(Number(data[0].count) / ITEMS_PER_PAGE);
-    return totalPages;
+    const response = await axios.get(`${process.env.API_BASE_URL}/invoices/pages`, {
+      params: { query },
+    });
+    return response.data.totalPages;
   } catch (error) {
-    console.error('Database Error:', error);
     throw new Error('Failed to fetch total number of invoices.');
   }
 }
+
 
 export async function fetchInvoiceById(id: string) {
   try {
