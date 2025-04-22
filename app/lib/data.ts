@@ -3,8 +3,6 @@ import axios from "axios";
 import { formatCurrency } from './utils';
 import {
   CustomerField,
-  CustomersTableType,
-  InvoiceForm,
   InvoicesTable,
 } from './definitions';
 
@@ -120,8 +118,6 @@ export async function fetchInvoiceById(id: string) {
       amount: response.data.amount / 100
     };
 
-
-
     return invoice;
   } catch (error) {
     console.error(`Error fetching invoice ${id}:`, error);
@@ -129,68 +125,45 @@ export async function fetchInvoiceById(id: string) {
   }
 }
 
-// Récupère la liste complète des clients depuis la base de données.
+// Récupère la liste complète des clients via l'API.
 export async function fetchCustomers() {
   try {
-    const customers = await sql<CustomerField[]>`
-      SELECT
-        id,
-        name
-      FROM customers
-      ORDER BY name ASC
-    `;
-
-    return customers;
+    const response = await axios.get(`${process.env.API_BASE_URL}/customers/all`);
+    return response.data;
   } catch (err) {
-    console.error('Database Error:', err);
+    console.error('API Error fetching all customers:', err);
     throw new Error('Failed to fetch all customers.');
   }
 }
 
 // Récupère les clients filtrés en fonction de la recherche depuis la base de données.
-export async function fetchFilteredCustomers(query: string) {
+export async function fetchFilteredCustomers(query: string, currentPage: number) {
   try {
-    const data = await sql<CustomersTableType[]>`
-		SELECT
-		  customers.id,
-		  customers.name,
-		  customers.email,
-		  customers.image_url,
-		  COUNT(invoices.id) AS total_invoices,
-		  SUM(CASE WHEN invoices.status = 'pending' THEN invoices.amount ELSE 0 END) AS total_pending,
-		  SUM(CASE WHEN invoices.status = 'paid' THEN invoices.amount ELSE 0 END) AS total_paid
-		FROM customers
-		LEFT JOIN invoices ON customers.id = invoices.customer_id
-		WHERE
-		  customers.name ILIKE ${`%${query}%`} OR
-        customers.email ILIKE ${`%${query}%`}
-		GROUP BY customers.id, customers.name, customers.email, customers.image_url
-		ORDER BY customers.name ASC
-	  `;
-
-    const customers = data.map((customer) => ({
+    const response = await axios.get(`${process.env.API_BASE_URL}/customers/`, {
+      params: { query, page: currentPage }
+    });
+    const data = response.data;
+    // Traitement et formatage des montants avec formatCurrency
+    const customers = data.map((customer: any) => ({
       ...customer,
       total_pending: formatCurrency(customer.total_pending),
       total_paid: formatCurrency(customer.total_paid),
     }));
-
     return customers;
   } catch (err) {
-    console.error('Database Error:', err);
-    throw new Error('Failed to fetch customer table.');
+    console.error('API Error fetching filtered customers:', err);
+    throw new Error('Failed to fetch filtered customers.');
   }
 }
 
 // Récupère le nombre total de pages pour les clients filtrés depuis la base de données.
-export async function fetchCustomersPages(query: string) {
+export async function fetchCustomersPages(query: string): Promise<number> {
   try {
-    const totalCustomers = await sql`
-      SELECT COUNT(*) AS count
-      FROM customers
-      WHERE name ILIKE ${`%${query}%`} OR email ILIKE ${`%${query}%`}
-    `;
-    const count = totalCustomers[0]?.count || 0;
-    const pages = Math.ceil(count / 10); // 10 clients par page
+    const response = await axios.get(`${process.env.API_BASE_URL}/customers/count`, {
+      params: { query }
+    });
+    const count = Number(response.data.count || 0);
+    const pages = Math.ceil(count / ITEMS_PER_PAGE);
     return pages;
   } catch (error) {
     console.error("Failed to fetch customers pages:", error);

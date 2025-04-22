@@ -9,7 +9,7 @@ export default async function CustomersTable({
   query: string;
   currentPage: number;
 }) {
-  const customers = await fetchFilteredCustomers(query);
+  const customers: FormattedCustomersTable[] = await fetchFilteredCustomers(query, currentPage);
 
   return (
     <div className="mt-6 flow-root">
