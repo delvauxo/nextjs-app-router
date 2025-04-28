@@ -139,8 +139,9 @@ export async function fetchCustomers() {
 // Récupère les clients filtrés en fonction de la recherche depuis la base de données.
 export async function fetchFilteredCustomers(query: string, currentPage: number) {
   try {
-    const response = await axios.get(`${process.env.API_BASE_URL}/customers/`, {
-      params: { query, page: currentPage }
+    const response = await axios.get(`${process.env.API_BASE_URL}/customers`, {
+      params: { query, page: currentPage },
+      headers: { "Content-Type": "application/json" }
     });
     const data = response.data;
     // Traitement et formatage des montants avec formatCurrency
