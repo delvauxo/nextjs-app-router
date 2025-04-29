@@ -1,9 +1,8 @@
 import axios from "axios";
 import { formatCurrency } from './utils';
 import { InvoicesTable } from './definitions';
-
-// Doit correspondre au nombre d'item par page côté backend pour ne pas créer de désalignement.
-const ITEMS_PER_PAGE = 5;
+import apiClient from "./apiClient";
+import { DEFAULT_CUSTOMERS_LIMIT } from "@/app/lib/config";
 
 // Récupère et formate les dernières factures (montant et date) depuis l'API.
 export async function fetchLatestInvoices() {
@@ -29,7 +28,7 @@ export async function fetchFilteredInvoices(query: string, currentPage: number):
       params: {
         query,
         page: currentPage,
-        limit: ITEMS_PER_PAGE,
+        limit: DEFAULT_CUSTOMERS_LIMIT,
       },
     });
 
@@ -87,7 +86,7 @@ export async function fetchCustomers() {
 // Récupère les clients filtrés en fonction de la recherche depuis la base de données.
 export async function fetchFilteredCustomers(query: string, currentPage: number, limit: number) {
   try {
-    const response = await axios.get(`${process.env.API_BASE_URL}/customers`, {
+    const response = await apiClient.get(`${process.env.API_BASE_URL}/customers`, {
       params: {
         query,
         page: currentPage,
@@ -105,21 +104,31 @@ export async function fetchFilteredCustomers(query: string, currentPage: number,
       total_paid: formatCurrency(customer.total_paid),
     }));
     return customers;
-  } catch (err) {
+  } catch (err: any) {
     console.error('API Error fetching filtered customers:', err);
+    // Si le backend a renvoyé un message d'erreur via l'intercepteur, on le propage
+    if (err.response && err.response.data && err.response.data.detail) {
+      throw new Error(err.response.data.detail);
+    }
+    // Sinon, on lance un message générique
     throw new Error('Failed to fetch filtered customers.');
   }
 }
 
-// Récupère le nombre total de pages pour les clients filtrés depuis la base de données.
+// Récupère le nombre de pages pour les clients.
 export async function fetchCustomersPages(query: string, limit: number): Promise<number> {
   try {
-    const response = await axios.get(`${process.env.API_BASE_URL}/customers/pages`, {
+    const response = await apiClient.get(`${process.env.API_BASE_URL}/customers/pages`, {
       params: { query, limit },
     });
     return response.data.totalPages;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to fetch customers pages:", error);
+    // Si le backend renvoie un message d'erreur détaillé, on le propage
+    if (error.response && error.response.data && error.response.data.detail) {
+      throw new Error(error.response.data.detail);
+    }
+    // Sinon, on lance un message générique.
     throw new Error("Error fetching pages.");
   }
 }

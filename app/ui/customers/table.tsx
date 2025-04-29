@@ -11,8 +11,29 @@ export default async function CustomersTable({
   currentPage: number;
   limit: number;
 }) {
-  const customers: FormattedCustomersTable[] = await fetchFilteredCustomers(query, currentPage, limit);
+  let customers: FormattedCustomersTable[] = [];
+  let errorMessage = "";
 
+  try {
+    // Appel API pour récupérer les clients filtrés
+    customers = await fetchFilteredCustomers(query, currentPage, limit);
+  } catch (error: any) {
+    // Au lieu de propager l'erreur, on capture son message
+    errorMessage = error.message;
+  }
+
+  // Si une erreur est survenue, on retourne une UI simple affichant le message
+  if (errorMessage) {
+    return (
+      <div className="mt-6">
+        <p className="text-red-500 font-medium">
+          {errorMessage}
+        </p>
+      </div>
+    );
+  }
+
+  // Sinon, on retourne le tableau des clients
   return (
     <div className="mt-6 flow-root">
       <div className="inline-block min-w-full align-middle">

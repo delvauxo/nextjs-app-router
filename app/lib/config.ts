@@ -1,0 +1,1 @@
+export const DEFAULT_CUSTOMERS_LIMIT = 6;

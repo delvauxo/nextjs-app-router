@@ -5,12 +5,13 @@ import clsx from 'clsx';
 import Link from 'next/link';
 import { generatePagination } from '@/app/lib/utils';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { DEFAULT_CUSTOMERS_LIMIT } from "@/app/lib/config";
 
 export default function Pagination({ totalPages }: { totalPages: number; }) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const currentPage = Number(searchParams.get('page')) || 1;
-    const limit = Number(searchParams.get('limit')) || 3;
+    const limit = Number(searchParams.get('limit')) || DEFAULT_CUSTOMERS_LIMIT;
     const allPages = generatePagination(currentPage, totalPages);
 
     const createPageURL = (pageNumber: number | string) => {
