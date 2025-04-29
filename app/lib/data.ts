@@ -3,7 +3,7 @@ import { formatCurrency } from './utils';
 import { InvoicesTable } from './definitions';
 
 // Doit correspondre au nombre d'item par page côté backend pour ne pas créer de désalignement.
-const ITEMS_PER_PAGE = 6;
+const ITEMS_PER_PAGE = 5;
 
 // Récupère et formate les dernières factures (montant et date) depuis l'API.
 export async function fetchLatestInvoices() {
@@ -85,13 +85,13 @@ export async function fetchCustomers() {
 }
 
 // Récupère les clients filtrés en fonction de la recherche depuis la base de données.
-export async function fetchFilteredCustomers(query: string, currentPage: number) {
+export async function fetchFilteredCustomers(query: string, currentPage: number, limit: number) {
   try {
     const response = await axios.get(`${process.env.API_BASE_URL}/customers`, {
       params: {
         query,
         page: currentPage,
-        limit: ITEMS_PER_PAGE,
+        limit,
       },
       headers: { "Content-Type": "application/json" }
     });
@@ -112,10 +112,10 @@ export async function fetchFilteredCustomers(query: string, currentPage: number)
 }
 
 // Récupère le nombre total de pages pour les clients filtrés depuis la base de données.
-export async function fetchCustomersPages(query: string): Promise<number> {
+export async function fetchCustomersPages(query: string, limit: number): Promise<number> {
   try {
     const response = await axios.get(`${process.env.API_BASE_URL}/customers/pages`, {
-      params: { query },
+      params: { query, limit },
     });
     return response.data.totalPages;
   } catch (error) {

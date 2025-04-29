@@ -5,11 +5,13 @@ import { FormattedCustomersTable } from "@/app/lib/definitions";
 export default async function CustomersTable({
   query,
   currentPage,
+  limit,
 }: {
   query: string;
   currentPage: number;
+  limit: number;
 }) {
-  const customers: FormattedCustomersTable[] = await fetchFilteredCustomers(query, currentPage);
+  const customers: FormattedCustomersTable[] = await fetchFilteredCustomers(query, currentPage, limit);
 
   return (
     <div className="mt-6 flow-root">

@@ -7,15 +7,16 @@ import { lusitana } from "@/app/ui/fonts";
 import { fetchCustomersPages } from "@/app/lib/data";
 
 export default async function CustomersPage(props: {
-    searchParams: Promise<{ query?: string; page?: string; }>;
+    searchParams: Promise<{ query?: string; page?: string; limit?: string; }>;
 }) {
     // Await the searchParams promise
     const resolvedSearchParams = await props.searchParams;
     const query = resolvedSearchParams?.query || "";
     const currentPage = Number(resolvedSearchParams?.page) || 1;
+    const limit = Number(resolvedSearchParams?.limit) || 4;
 
     // Fetch totalPages dynamically
-    const totalPages = await fetchCustomersPages(query);
+    const totalPages = await fetchCustomersPages(query, limit);
 
     return (
         <div className="w-full">
@@ -26,7 +27,7 @@ export default async function CustomersPage(props: {
                 <Search placeholder="Search customers..." />
             </div>
             <Suspense key={query + currentPage} fallback={<CustomersTableSkeleton />}>
-                <Table query={query} currentPage={currentPage} />
+                <Table query={query} currentPage={currentPage} limit={limit} />
             </Suspense>
             <div className="mt-5 flex w-full justify-center">
                 <Pagination totalPages={totalPages} />
