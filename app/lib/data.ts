@@ -1,7 +1,7 @@
 import axios from "axios";
+import apiClient from "./apiClient";
 import { formatCurrency } from './utils';
 import { InvoicesTable } from './definitions';
-import apiClient from "./apiClient";
 import { DEFAULT_CUSTOMERS_LIMIT } from "@/app/lib/config";
 
 // Récupère et formate les dernières factures (montant et date) depuis l'API.

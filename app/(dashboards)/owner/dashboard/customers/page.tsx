@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import Pagination from "@/app/ui/customers/pagination";
 import Search from "@/app/ui/search";
 import Table from "@/app/ui/customers/table";
+import LimitFilter from '@/app/ui/customers/limitFilter';
 import { CustomersTableSkeleton } from "@/app/ui/skeletons";
 import { lusitana } from "@/app/ui/fonts";
 import { fetchCustomersPages } from "@/app/lib/data";
@@ -26,6 +27,7 @@ export default async function CustomersPage(props: {
             </div>
             <div className="mt-4 flex items-center justify-between gap-2 md:mt-8">
                 <Search placeholder="Search customers..." />
+                <LimitFilter />
             </div>
             <Suspense key={query + currentPage} fallback={<CustomersTableSkeleton />}>
                 <Table query={query} currentPage={currentPage} limit={limit} />
