@@ -2,7 +2,7 @@ import axios from "axios";
 import apiClient from "./apiClient";
 import { formatCurrency } from './utils';
 import { InvoicesTable } from './definitions';
-import { DEFAULT_CUSTOMERS_LIMIT } from "@/app/lib/config";
+import { DEFAULT_CUSTOMERS_LIMIT, DEFAULT_INVOICES_LIMIT } from "@/app/lib/config";
 
 // Récupère et formate les dernières factures (montant et date) depuis l'API.
 export async function fetchLatestInvoices() {
@@ -22,13 +22,13 @@ export async function fetchLatestInvoices() {
 }
 
 // Récupère les factures filtrées basée sur la query de la search-bar depuis l'API.
-export async function fetchFilteredInvoices(query: string, currentPage: number): Promise<InvoicesTable[]> {
+export async function fetchFilteredInvoices(query: string, currentPage: number, limit: number): Promise<InvoicesTable[]> {
   try {
     const response = await axios.get(`${process.env.API_BASE_URL}/invoices`, {
       params: {
         query,
         page: currentPage,
-        limit: DEFAULT_CUSTOMERS_LIMIT,
+        limit,
       },
     });
 
@@ -40,10 +40,10 @@ export async function fetchFilteredInvoices(query: string, currentPage: number):
 }
 
 // Récupère le nombre total de pages basé sur la recherche depuis l'API.
-export async function fetchInvoicesPages(query: string): Promise<number> {
+export async function fetchInvoicesPages(query: string, limit: number): Promise<number> {
   try {
     const response = await axios.get(`${process.env.API_BASE_URL}/invoices/pages`, {
-      params: { query },
+      params: { query, limit },
     });
     return response.data.totalPages;
   } catch (error) {

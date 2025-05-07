@@ -5,7 +5,7 @@ import { FormattedCustomersTable } from "@/app/lib/definitions";
 export default async function CustomersTable({
   query,
   currentPage,
-  limit,
+  limit
 }: {
   query: string;
   currentPage: number;

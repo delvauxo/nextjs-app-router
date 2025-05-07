@@ -9,11 +9,15 @@ import { fetchCustomersPages } from "@/app/lib/data";
 import { DEFAULT_CUSTOMERS_LIMIT } from "@/app/lib/config";
 
 export default async function CustomersPage(props: {
-    searchParams: Promise<{ query?: string; page?: string; limit?: string; }>;
+    searchParams: Promise<{
+        query?: string;
+        page?: string;
+        limit?: string;
+    }>;
 }) {
     // Await the searchParams promise
     const resolvedSearchParams = await props.searchParams;
-    const query = resolvedSearchParams?.query || "";
+    const query = resolvedSearchParams?.query || '';
     const currentPage = Number(resolvedSearchParams?.page) || 1;
     const limit = Number(resolvedSearchParams?.limit) || DEFAULT_CUSTOMERS_LIMIT;
 

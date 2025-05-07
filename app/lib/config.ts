@@ -1,1 +1,2 @@
 export const DEFAULT_CUSTOMERS_LIMIT = 6;
+export const DEFAULT_INVOICES_LIMIT = 6;
