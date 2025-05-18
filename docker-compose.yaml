@@ -5,6 +5,9 @@ networks:
 services:
 
   postgres:
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile.postgres
     image: postgres:latest  # Utilise la dernière image officielle de PostgreSQL
     container_name: postgres_ssl  # Nom personnalisé du conteneur
     restart: always  # Redémarre automatiquement le conteneur en cas d'arrêt
@@ -15,8 +18,6 @@ services:
     ports:
       - "5432:5432"  # Expose le port PostgreSQL pour accès local
     volumes:
-      - ./docker/certs/server.crt:/etc/ssl/server.crt:ro  # Certificat SSL pour connexion sécurisée
-      - ./docker/certs/server.key:/etc/ssl/server.key:ro  # Clé SSL privée
       - ./docker/conf/postgresql.conf:/etc/postgresql/postgresql.conf:ro  # Fichier de config PostgreSQL personnalisé
       - ./docker/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro  # Contrôle les méthodes d’authentification des clients
       - ./docker/init/init.sql:/docker-entrypoint-initdb.d/init.sql:ro  # Script d'initialisation SQL
