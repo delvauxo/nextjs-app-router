@@ -100,27 +100,3 @@ export function decodeJWT(token: string) {
     signature: signature,
   };
 }
-
-// Fonction pour vérifier les rôles et rediriger si nécessaire
-export async function checkRole(
-  request: NextRequest,
-  requiredRole: string,
-  pathPrefix: string
-) {
-  const token = await getToken({ req: request });
-
-  if (!token) {
-    return NextResponse.redirect(new URL('/api/auth/signin', request.url));
-  }
-
-  const roles = getRolesFromToken(token.id_token!) || [];
-  const pathname = request.nextUrl.pathname;
-
-  if (pathname.startsWith(pathPrefix)) {
-    if (!roles.includes(requiredRole)) {
-      return NextResponse.redirect(new URL('/unauthorized', request.url));
-    }
-  }
-
-  return NextResponse.next();
-}
