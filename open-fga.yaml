@@ -1,0 +1,36 @@
+# fga store import --store-id 01JY48DRE3KJQ1F1Q3ZF8HVCTR --file open-fga.yaml
+
+name: parkigo-store
+model: |
+  model
+    schema 1.1
+
+  type user
+
+  type dashboard
+    relations
+      define admin: [user]
+      define owner: [user] or admin
+      define renter: [user] or admin
+
+tuples:
+  # Admin user : accès total aux 3 dashboards
+  - user: user:e4d137a8-ca21-4bd5-80dc-69cee3432bdb
+    relation: admin
+    object: dashboard:admin
+  - user: user:e4d137a8-ca21-4bd5-80dc-69cee3432bdb
+    relation: admin
+    object: dashboard:owner
+  - user: user:e4d137a8-ca21-4bd5-80dc-69cee3432bdb
+    relation: admin
+    object: dashboard:renter
+
+  # Renter user : accès uniquement au dashboard renter
+  - user: user:15d36145-5cea-49e5-9f9f-fe71bfe502fb
+    relation: renter
+    object: dashboard:renter
+
+  # Owner user : accès uniquement au dashboard owner
+  - user: user:ecacf8de-e81a-4ca7-83d6-d7fc200bf9a4
+    relation: owner
+    object: dashboard:owner

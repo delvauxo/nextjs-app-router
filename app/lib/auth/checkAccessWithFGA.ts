@@ -4,12 +4,13 @@ import { NextResponse, NextRequest } from 'next/server';
 const STORE_ID = process.env.FGA_STORE_ID!;
 const FGA_API_URL = `${process.env.FGA_API_URL}/stores/${STORE_ID}/check`;
 
-export async function checkRoleOpenFGA(
+export async function checkAccessWithFGA(
     request: NextRequest,
-    requiredRelation: string,
+    dashboardType: 'admin' | 'owner' | 'renter',
     pathPrefix: string
 ) {
     const token = await getToken({ req: request });
+
     if (!token || !token.id_token) {
         return NextResponse.redirect(new URL('/api/auth/signin', request.url));
     }
@@ -25,15 +26,12 @@ export async function checkRoleOpenFGA(
         return NextResponse.next();
     }
 
-    // Relation doit être "admin", "owner" ou "renter" exactement
-    const object = `dashboard:dashboard_${requiredRelation}`;
-
     const body = {
         store_id: STORE_ID,
         tuple_key: {
             user: `user:${userId}`,
-            relation: requiredRelation,  // admin, owner, renter
-            object: object,  // correspond au modèle
+            relation: dashboardType,
+            object: `dashboard:${dashboardType}`,
         },
     };
 
