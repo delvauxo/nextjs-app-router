@@ -3,33 +3,30 @@ set -e
 
 FILE_PATH="/import/open-fga.yaml"
 OPENFGA_HOST="http://openfga:8080"
-OUTPUT_DIR="/output"
-OUTPUT_JSON="$OUTPUT_DIR/store.json"
+ENV_FILE="/app/.env.local"
 
-# Attente que le service OpenFGA soit prêt
 echo "⏳ Attente de la disponibilité d'OpenFGA..."
 until curl -s "$OPENFGA_HOST/healthz" | grep '"SERVING"' > /dev/null; do
   sleep 2
 done
 echo "✅ OpenFGA est prêt."
 
-# Création du dossier output même si le fichier n'existe pas encore
-echo "📁 Vérification ou création du dossier $OUTPUT_DIR"
-mkdir -p "$OUTPUT_DIR"
-
 REUSE_STORE=false
+STORE_ID=""
 
-if [ -f "$OUTPUT_JSON" ]; then
-  STORE_ID=$(grep -oE '"FGA_STORE_ID"\s*:\s*"[^"]+"' "$OUTPUT_JSON" | cut -d':' -f2 | tr -d ' "')
-  echo "🔍 store.json trouvé, tentative de réutilisation du STORE_ID : $STORE_ID"
+# Vérifie si une valeur FGA_STORE_ID existe dans le .env.local
+if grep -q "^FGA_STORE_ID=" "$ENV_FILE"; then
+  CURRENT_STORE_ID=$(grep "^FGA_STORE_ID=" "$ENV_FILE" | cut -d'=' -f2)
+  echo "🔍 FGA_STORE_ID trouvé dans .env.local : $CURRENT_STORE_ID"
 
-  # Vérifie que le store existe réellement
-  STORE_CHECK=$(curl -s "$OPENFGA_HOST/stores/$STORE_ID")
-  if echo "$STORE_CHECK" | grep -q "\"id\":\"$STORE_ID\""; then
-    echo "✅ Store $STORE_ID confirmé valide dans OpenFGA. Réutilisation."
+  # Vérifie que ce store existe dans OpenFGA
+  STORE_CHECK=$(curl -s "$OPENFGA_HOST/stores/$CURRENT_STORE_ID")
+  if echo "$STORE_CHECK" | grep -q "\"id\":\"$CURRENT_STORE_ID\""; then
+    echo "✅ Store $CURRENT_STORE_ID est valide. Réutilisation."
     REUSE_STORE=true
+    STORE_ID=$CURRENT_STORE_ID
   else
-    echo "❌ Le store ID n'existe plus dans OpenFGA. Recréation nécessaire."
+    echo "❌ Store $CURRENT_STORE_ID n'existe pas dans OpenFGA. Création d'un nouveau store."
   fi
 fi
 
@@ -43,6 +40,14 @@ if [ "$REUSE_STORE" = false ]; then
   fga --api-url "$OPENFGA_HOST" store import --store-id "$STORE_ID" --file "$FILE_PATH"
   echo "✅ Modèle importé dans le store $STORE_ID"
 
-  echo "📝 Enregistrement du store ID dans $OUTPUT_JSON"
-  echo "{\"FGA_STORE_ID\": \"$STORE_ID\"}" > "$OUTPUT_JSON"
+  # Mise à jour propre de la variable dans .env.local
+  if grep -q "^FGA_STORE_ID=" "$ENV_FILE"; then
+    sed -i "s/^FGA_STORE_ID=.*/FGA_STORE_ID=$STORE_ID/" "$ENV_FILE"
+  else
+    echo -e "\nFGA_STORE_ID=$STORE_ID" >> "$ENV_FILE"
+  fi
+
+  echo "📝 .env.local mis à jour avec FGA_STORE_ID=$STORE_ID"
+else
+  echo "ℹ️ Pas besoin de créer un nouveau store."
 fi
