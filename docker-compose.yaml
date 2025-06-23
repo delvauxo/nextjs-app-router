@@ -54,7 +54,7 @@ services:
       - postgres  # Attente de démarrage du service PostgreSQL
     volumes:
       - keycloak-data:/opt/keycloak/data  # Volume pour les données persistantes Keycloak
-      - ./docker/init/keycloak-init.json:/opt/keycloak/data/import/keycloak-init.json:ro  # Monte le fichier de config Keycloak dans le conteneur
+      - ./docker/keycloak/keycloak-init.json:/opt/keycloak/data/import/keycloak-init.json:ro  # Monte le fichier de config Keycloak dans le conteneur
     networks:
       - openfga
 
