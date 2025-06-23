@@ -88,8 +88,20 @@ services:
       - "3001:3000"  # Interface ou debug (selon config)
     volumes:
       - openfga-data:/var/lib/openfga  # Volume persistant pour OpenFGA
+      - ./docker/openfga/open-fga.yaml:/import/open-fga.yaml:ro
     networks:
       - openfga
+
+  openfga-import:
+    build: ./docker/openfga
+    container_name: openfga-import
+    depends_on:
+      - openfga
+    volumes:
+      - ./docker/openfga:/import:ro
+    networks:
+      - openfga
+    entrypoint: /import/import.sh
 
   fastapi:
     image: tiangolo/uvicorn-gunicorn-fastapi:latest  # Image officielle pour FastAPI avec Gunicorn et Uvicorn

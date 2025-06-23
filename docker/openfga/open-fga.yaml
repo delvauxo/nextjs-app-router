@@ -1,4 +1,5 @@
-# fga store import --store-id 01JY48DRE3KJQ1F1Q3ZF8HVCTR --file open-fga.yaml
+# [LOCAL]     | fga store import --store-id 01JYE8KWQFYB3G44HTJZBPX7QT --file open-fga.yaml
+# [CONTAINER] | fga --api-url http://openfga:8080 store import --store-id 01JYE8KWQFYB3G44HTJZBPX7QT --file /import/open-fga.yaml
 
 name: parkigo-store
 model: |
