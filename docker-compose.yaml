@@ -15,12 +15,12 @@ services:
     ports:
       - "5432:5432"  # Expose le port PostgreSQL pour accès local
     volumes:
-      - ./docker/certs/server.crt:/etc/ssl/server.crt:ro  # Certificat SSL pour connexion sécurisée
-      - ./docker/certs/server.key:/etc/ssl/server.key:ro  # Clé SSL privée
-      - ./docker/conf/postgresql.conf:/etc/postgresql/postgresql.conf:ro  # Fichier de config PostgreSQL personnalisé
-      - ./docker/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro  # Contrôle les méthodes d’authentification des clients
-      - ./docker/init/init.sql:/docker-entrypoint-initdb.d/init.sql:ro  # Script d'initialisation SQL
-      - ./docker/init/yolo.sql:/docker-entrypoint-initdb.d/yolo.sql:ro  # Second script d'initialisation
+      - ./docker/postgres/certs/server.crt:/etc/ssl/server.crt:ro  # Certificat SSL pour connexion sécurisée
+      - ./docker/postgres/certs/server.key:/etc/ssl/server.key:ro  # Clé SSL privée
+      - ./docker/postgres/conf/postgresql.conf:/etc/postgresql/postgresql.conf:ro  # Fichier de config PostgreSQL personnalisé
+      - ./docker/postgres/conf/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro  # Contrôle les méthodes d’authentification des clients
+      - ./docker/postgres/init/00-init-databases.sql:/docker-entrypoint-initdb.d/00-init-databases.sql:ro  # Script d'initialisation SQL
+      - ./docker/postgres/init/10-seed-initial-data.sql:/docker-entrypoint-initdb.d/10-seed-initial-data.sql:ro  # Second script d'initialisation
       - pgdata-postgres:/var/lib/postgresql/data  # Volume persistant des données PostgreSQL
     command: postgres -c config_file=/etc/postgresql/postgresql.conf  # Lancement avec fichier de config custom
     networks:

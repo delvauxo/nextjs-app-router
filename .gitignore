@@ -36,4 +36,4 @@ yarn-error.log*
 next-env.d.ts
 
 # Docker Certs
-/docker/certs
+/docker/postgres/certs
