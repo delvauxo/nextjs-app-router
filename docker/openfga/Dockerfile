@@ -20,7 +20,7 @@ RUN curl -s https://api.github.com/repos/openfga/cli/releases/latest \
 
 # Copier les fichiers d'import
 COPY import.sh /import/import.sh
-COPY open-fga.yaml /import/open-fga.yaml
+COPY openfga-model.yaml /import/openfga-model.yaml
 
 # Donner les droits d'exécution
 RUN chmod +x /import/import.sh

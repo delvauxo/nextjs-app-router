@@ -88,7 +88,7 @@ services:
       - "3001:3000"  # Interface ou debug (selon config)
     volumes:
       - openfga-data:/var/lib/openfga  # Volume persistant pour OpenFGA
-      - ./docker/openfga/open-fga.yaml:/import/open-fga.yaml:ro
+      - ./docker/openfga/openfga-model.yaml:/import/openfga-model.yaml:ro
     networks:
       - openfga
 
@@ -98,7 +98,7 @@ services:
     depends_on:
       - openfga  # Ne démarre ce conteneur que lorsque le service OpenFGA est en place
     volumes:
-      - ./docker/openfga:/import:ro  # Monte le dossier contenant open-fga.yaml et le script d'import en lecture seule
+      - ./docker/openfga:/import:ro  # Monte le dossier contenant openfga-model.yaml et le script d'import en lecture seule
       - ./:/app  # Monte tout le projet local dans /app pour accéder au .env.local
     networks:
       - openfga  # Connecté au même réseau que les autres services pour communiquer avec OpenFGA
