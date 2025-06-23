@@ -99,6 +99,7 @@ services:
       - openfga
     volumes:
       - ./docker/openfga:/import:ro
+      - ./fga:/output  # Volume pour écrire le store_id en JSON
     networks:
       - openfga
     entrypoint: /import/import.sh
