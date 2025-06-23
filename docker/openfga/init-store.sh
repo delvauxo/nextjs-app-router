@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-FILE_PATH="/import/openfga-model.yaml"
+FILE_PATH="/import/config/store.yaml"
 OPENFGA_HOST="http://openfga:8080"
 ENV_FILE="/app/.env.local"
 
