@@ -102,7 +102,6 @@ services:
       - ./:/app  # Monte tout le projet local dans /app pour accéder au .env.local
     networks:
       - openfga  # Connecté au même réseau que les autres services pour communiquer avec OpenFGA
-    entrypoint: /import/init-store.sh  # Lance automatiquement le script d'import à l'initialisation (store creation + .env update)
 
   fastapi:
     image: tiangolo/uvicorn-gunicorn-fastapi:latest  # Image officielle pour FastAPI avec Gunicorn et Uvicorn

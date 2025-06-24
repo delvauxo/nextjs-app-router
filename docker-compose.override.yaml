@@ -1,0 +1,4 @@
+services:
+  openfga-import:
+    environment:
+      - APP_ENV=development

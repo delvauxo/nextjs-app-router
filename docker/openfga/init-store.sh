@@ -1,9 +1,22 @@
 #!/bin/bash
 set -e
 
+APP_ENV=${APP_ENV:-development}
+echo "🔧 Environnement détecté : $APP_ENV"
+
+if [ "$APP_ENV" = "production" ]; then
+  echo "⚠️⚠️⚠️  Attention : script exécuté en environnement de production !"
+fi
+
 FILE_PATH="/import/config/store.yaml"
 OPENFGA_HOST="http://openfga:8080"
-ENV_FILE="/app/.env.local"
+
+# Choix du bon fichier .env selon l’environnement
+if [ "$APP_ENV" = "production" ]; then
+  ENV_FILE="/app/.env.production"
+else
+  ENV_FILE="/app/.env.local"
+fi
 
 echo "⏳ Attente de la disponibilité d'OpenFGA..."
 until curl -s "$OPENFGA_HOST/healthz" | grep '"SERVING"' > /dev/null; do
