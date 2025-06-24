@@ -32,22 +32,21 @@ fi
 
 if [ "$REUSE_STORE" = false ]; then
   echo "🛠️ Création d'un nouveau store..."
-  STORE_RESPONSE=$(fga --api-url "$OPENFGA_HOST" store create --name "parkigo-store")
-  STORE_ID=$(echo "$STORE_RESPONSE" | grep -oE '"id":"[^"]+"' | cut -d':' -f2 | tr -d '"')
+  STORE_ID=$(fga --api-url "$OPENFGA_HOST" store create --name "parkigo-store" | jq -r .store.id)
   echo "✅ Nouveau store créé : $STORE_ID"
 
   echo "📦 Import du modèle dans le store..."
   fga --api-url "$OPENFGA_HOST" store import --store-id "$STORE_ID" --file "$FILE_PATH"
   echo "✅ Modèle importé dans le store $STORE_ID"
 
-  # Mise à jour propre de la variable dans .env.local
+  echo "📝 Mise à jour de $ENV_FILE avec FGA_STORE_ID=$STORE_ID..."
   if grep -q "^FGA_STORE_ID=" "$ENV_FILE"; then
-    sed -i "s/^FGA_STORE_ID=.*/FGA_STORE_ID=$STORE_ID/" "$ENV_FILE"
+    sed -i.bak "s/^FGA_STORE_ID=.*/FGA_STORE_ID=$STORE_ID/" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+    echo "🔁 Variable FGA_STORE_ID mise à jour."
   else
     echo -e "\nFGA_STORE_ID=$STORE_ID" >> "$ENV_FILE"
+    echo "➕ Variable FGA_STORE_ID ajoutée à la fin du fichier."
   fi
-
-  echo "📝 .env.local mis à jour avec FGA_STORE_ID=$STORE_ID"
 else
   echo "ℹ️ Pas besoin de créer un nouveau store."
 fi

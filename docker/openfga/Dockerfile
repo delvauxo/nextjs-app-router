@@ -1,7 +1,7 @@
 FROM alpine:latest
 
 # Installer les outils nécessaires
-RUN apk add --no-cache curl bash tar
+RUN apk add --no-cache curl bash tar jq
 
 # Définir le répertoire de travail
 WORKDIR /usr/local/bin
@@ -16,7 +16,6 @@ RUN curl -s https://api.github.com/repos/openfga/cli/releases/latest \
   mv fga /usr/local/bin/fga && \
   chmod +x /usr/local/bin/fga && \
   rm -f fga.tar.gz
-
 
 # Copier les fichiers d'import
 COPY init-store.sh /import/init-store.sh
