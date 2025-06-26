@@ -2,3 +2,4 @@ services:
   openfga-import:
     environment:
       - APP_ENV=development
+      - FORCE_IMPORT=${FORCE_IMPORT:-false}
