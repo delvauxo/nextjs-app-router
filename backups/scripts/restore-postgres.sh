@@ -113,7 +113,7 @@ select DIR_NAME in "${OPTIONS[@]}"; do
   fi
 done
 
-# === Bases à restaurer et leurs fichiers ===
+# === Bases à restaurer et sélection interactive ===
 LATEST_BACKUP_DIR="$SELECTED_BACKUP_DIR"
 declare -A DATABASES=(
   ["$POSTGRES_DATABASE"]="$LATEST_BACKUP_DIR/$POSTGRES_DATABASE.sql"
@@ -121,23 +121,31 @@ declare -A DATABASES=(
   ["openfga"]="$LATEST_BACKUP_DIR/openfga.sql"
 )
 
+declare -A DATABASES_TO_RESTORE=()
+
 echo ""
-echo -e "${YELLOW}Bases à restaurer (si fichier présent) :${NC}"
+echo -e "${YELLOW}Bases à restaurer (sélection individuelle) :${NC}"
 echo ""
+
 for DB_NAME in "${!DATABASES[@]}"; do
   FILE_PATH="${DATABASES[$DB_NAME]}"
   if [ -f "$FILE_PATH" ]; then
     echo -e " - ${GREEN}$DB_NAME${NC} ✔ ($FILE_PATH)"
+    read -rp "   ➤ Restaurer cette base ? (Y/n) : " CHOICE
+    CHOICE=${CHOICE:-y}
+    if [[ "$CHOICE" == "y" || "$CHOICE" == "Y" ]]; then
+      DATABASES_TO_RESTORE["$DB_NAME"]="$FILE_PATH"
+    else
+      echo -e "   ⏩ ${YELLOW}Ignorée${NC}"
+    fi
   else
     echo -e " - ${YELLOW}$DB_NAME${NC} ⚠ (fichier absent)"
   fi
 done
 
-echo ""
-read -rp "❓ Continuer avec cette restauration ? (Y/n) : " CONFIRM
-CONFIRM=${CONFIRM:-y}
-if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
-  echo -e "${RED}❌ Restauration annulée.${NC}"
+if [ ${#DATABASES_TO_RESTORE[@]} -eq 0 ]; then
+  echo ""
+  echo -e "${RED}❌ Aucune base sélectionnée pour la restauration. Opération annulée.${NC}"
   exit 0
 fi
 
@@ -168,24 +176,20 @@ echo ""
 
 declare -A STATUS
 
-for DB_NAME in "${!DATABASES[@]}"; do
-  FILE_PATH="${DATABASES[$DB_NAME]}"
-  if [ -f "$FILE_PATH" ]; then
-    echo -e "${YELLOW}⚠️ Déconnexion des connexions actives sur la base '$DB_NAME'...${NC}"
-    psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -c "
-    SELECT pg_terminate_backend(pid)
-    FROM pg_stat_activity
-    WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();
-    "
-    echo -e "${YELLOW}Suppression + recréation de la base '$DB_NAME'...${NC}"
-    dropdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" --if-exists "$DB_NAME"
-    createdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$DB_NAME"
-    echo -e "${YELLOW}Restauration depuis le fichier : $FILE_PATH${NC}"
-    psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$DB_NAME" -f "$FILE_PATH"
-    STATUS["$DB_NAME"]="${GREEN}✅ Restaurée${NC}"
-  else
-    STATUS["$DB_NAME"]="${YELLOW}⏩ Ignorée (fichier absent)${NC}"
-  fi
+for DB_NAME in "${!DATABASES_TO_RESTORE[@]}"; do
+  FILE_PATH="${DATABASES_TO_RESTORE[$DB_NAME]}"
+  echo -e "${YELLOW}⚠️ Déconnexion des connexions actives sur la base '$DB_NAME'...${NC}"
+  psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -c "
+  SELECT pg_terminate_backend(pid)
+  FROM pg_stat_activity
+  WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();
+  "
+  echo -e "${YELLOW}Suppression + recréation de la base '$DB_NAME'...${NC}"
+  dropdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" --if-exists "$DB_NAME"
+  createdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$DB_NAME"
+  echo -e "${YELLOW}Restauration depuis le fichier : $FILE_PATH${NC}"
+  psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$DB_NAME" -f "$FILE_PATH"
+  STATUS["$DB_NAME"]="${GREEN}✅ Restaurée${NC}"
 done
 
 # === Redémarrage des services dépendants ===
@@ -199,7 +203,11 @@ echo ""
 echo -e "${GREEN}✅ Restauration terminée. Résumé :${NC}"
 echo ""
 for DB_NAME in "${!DATABASES[@]}"; do
-  echo -e " - $DB_NAME : ${STATUS[$DB_NAME]}"
+  if [[ -n "${STATUS[$DB_NAME]+x}" ]]; then
+    echo -e " - $DB_NAME : ${STATUS[$DB_NAME]}"
+  else
+    echo -e " - $DB_NAME : ${YELLOW}⏩ Ignorée${NC}"
+  fi
 done
 
 # === Synchronisation automatique du FGA_STORE_ID restauré ===
