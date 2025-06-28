@@ -230,7 +230,7 @@ for DB_NAME in "${!DATABASES[@]}"; do
   fi
 done
 
-# === Synchronisation automatique du FGA_STORE_ID restauré ===
+# === Synchronisation automatique du FGA_STORE_ID restauré si la base openfga a été restaurée ===
 if [[ -n "${STATUS["openfga"]+x}" ]]; then
   echo ""
   echo -e "${BLUE}🔄 Synchronisation de FGA_STORE_ID depuis la base restaurée 'openfga'...${NC}"
