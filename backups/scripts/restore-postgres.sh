@@ -124,23 +124,38 @@ declare -A DATABASES=(
 declare -A DATABASES_TO_RESTORE=()
 
 echo ""
-echo -e "${YELLOW}Bases à restaurer (sélection individuelle) :${NC}"
+echo -e "${YELLOW}Bases à restaurer détectées :${NC}"
 echo ""
-
 for DB_NAME in "${!DATABASES[@]}"; do
   FILE_PATH="${DATABASES[$DB_NAME]}"
   if [ -f "$FILE_PATH" ]; then
     echo -e " - ${GREEN}$DB_NAME${NC} ✔ ($FILE_PATH)"
-    read -rp "   ➤ Restaurer cette base ? (Y/n) : " CHOICE
-    CHOICE=${CHOICE:-y}
-    if [[ "$CHOICE" == "y" || "$CHOICE" == "Y" ]]; then
-      DATABASES_TO_RESTORE["$DB_NAME"]="$FILE_PATH"
-    else
-      echo -e "   ⏩ ${YELLOW}Ignorée${NC}"
-    fi
   else
     echo -e " - ${YELLOW}$DB_NAME${NC} ⚠ (fichier absent)"
   fi
+
+done
+
+echo ""
+read -rp "➤ Tout restaurer sans sélection individuelle ? (Y/n) : " FULL_RESTORE
+FULL_RESTORE=${FULL_RESTORE:-y}
+
+for DB_NAME in "${!DATABASES[@]}"; do
+  FILE_PATH="${DATABASES[$DB_NAME]}"
+  if [ -f "$FILE_PATH" ]; then
+    if [[ "$FULL_RESTORE" == "y" || "$FULL_RESTORE" == "Y" ]]; then
+      DATABASES_TO_RESTORE["$DB_NAME"]="$FILE_PATH"
+    else
+      read -rp "   ➤ Restaurer la base '$DB_NAME' ? (Y/n) : " CHOICE
+      CHOICE=${CHOICE:-y}
+      if [[ "$CHOICE" == "y" || "$CHOICE" == "Y" ]]; then
+        DATABASES_TO_RESTORE["$DB_NAME"]="$FILE_PATH"
+      else
+        echo -e "   ⏩ ${YELLOW}Ignorée${NC}"
+      fi
+    fi
+  fi
+
 done
 
 if [ ${#DATABASES_TO_RESTORE[@]} -eq 0 ]; then
