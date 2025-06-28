@@ -73,11 +73,11 @@ PGPASS_FILE="$SCRIPT_DIR/.pgpass"
 echo "$POSTGRES_HOST:$POSTGRES_PORT:*:$POSTGRES_USER:$POSTGRES_PASSWORD" > "$PGPASS_FILE"
 chmod 600 "$PGPASS_FILE"
 export PGPASSFILE="$PGPASS_FILE"
-echo -e "${GREEN}✅ Fichier .pgpass temporaire généré${NC}"
+echo -e "${GREEN}Fichier .pgpass temporaire généré${NC}"
 
 cleanup_pgpass() {
   rm -f "$PGPASS_FILE"
-  echo -e "${GREEN}❌ Fichier .pgpass temporaire supprimé${NC}"
+  echo -e "${GREEN}Fichier .pgpass temporaire supprimé${NC}"
   echo ""
 }
 trap cleanup_pgpass EXIT
@@ -95,15 +95,21 @@ echo ""
 echo -e "${YELLOW}Dossiers de backup disponibles :${NC}"
 echo ""
 
-select DIR_NAME in "${BACKUP_DIRS[@]##*/}"; do
-  SELECTED_BACKUP_DIR="$BACKUPS_DIR/$DIR_NAME"
-  if [ -n "$DIR_NAME" ]; then
+OPTIONS=("${BACKUP_DIRS[@]##*/}" "Annuler")
+
+select DIR_NAME in "${OPTIONS[@]}"; do
+  if [ "$DIR_NAME" = "Annuler" ]; then
     echo ""
-    echo -e "✅ Dossier sélectionné : ${GREEN}$SELECTED_BACKUP_DIR${NC}"
+    echo -e "${RED}Opération annulée.${NC}"
+    exit 0
+  elif [ -n "$DIR_NAME" ]; then
+    SELECTED_BACKUP_DIR="$BACKUPS_DIR/$DIR_NAME"
+    echo ""
+    echo -e "Dossier sélectionné : ${GREEN}$SELECTED_BACKUP_DIR${NC}"
     break
   else
     echo ""
-    echo -e "${RED}❌ Sélection invalide. Choisis un numéro valide.${NC}"
+    echo -e "${RED}Sélection invalide. Choisis un numéro valide.${NC}"
   fi
 done
 
