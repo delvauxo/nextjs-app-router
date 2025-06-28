@@ -9,7 +9,8 @@ NC='\033[0m'
 
 # === Détection de l’environnement ===
 APP_ENV=${APP_ENV:-local}
-echo -e "${YELLOW}Environnement détecté : ${APP_ENV}${NC}"
+echo ""
+echo -e "Environnement détecté : ${YELLOW}${APP_ENV}${NC}"
 
 if [ "$APP_ENV" = "production" ]; then
   echo -e "${RED}⚠️⚠️⚠️ Attention : script exécuté en environnement de production !${NC}"
@@ -77,21 +78,37 @@ echo -e "${GREEN}✅ Fichier .pgpass temporaire généré${NC}"
 cleanup_pgpass() {
   rm -f "$PGPASS_FILE"
   echo -e "${GREEN}❌ Fichier .pgpass temporaire supprimé${NC}"
+  echo ""
 }
 trap cleanup_pgpass EXIT
 
-# === Détection du dossier de backup le plus récent ===
+# === Sélection interactive du dossier de backup ===
 BACKUPS_DIR="$PROJECT_ROOT/backups"
-LATEST_BACKUP_DIR=$(find "$BACKUPS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name scripts | sort -r | head -n 1 || true)
+BACKUP_DIRS=($(find "$BACKUPS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name scripts | sort -r))
 
-if [ -z "$LATEST_BACKUP_DIR" ]; then
+if [ ${#BACKUP_DIRS[@]} -eq 0 ]; then
   echo -e "${RED}❌ Aucun dossier de backup trouvé dans $BACKUPS_DIR${NC}"
   exit 1
 fi
 
-echo -e "${GREEN}Dernier dossier de backup détecté : $LATEST_BACKUP_DIR${NC}"
+echo ""
+echo -e "${YELLOW}Dossiers de backup disponibles :${NC}"
+echo ""
+
+select DIR_NAME in "${BACKUP_DIRS[@]##*/}"; do
+  SELECTED_BACKUP_DIR="$BACKUPS_DIR/$DIR_NAME"
+  if [ -n "$DIR_NAME" ]; then
+    echo ""
+    echo -e "✅ Dossier sélectionné : ${GREEN}$SELECTED_BACKUP_DIR${NC}"
+    break
+  else
+    echo ""
+    echo -e "${RED}❌ Sélection invalide. Choisis un numéro valide.${NC}"
+  fi
+done
 
 # === Bases à restaurer et leurs fichiers ===
+LATEST_BACKUP_DIR="$SELECTED_BACKUP_DIR"
 declare -A DATABASES=(
   ["$POSTGRES_DATABASE"]="$LATEST_BACKUP_DIR/$POSTGRES_DATABASE.sql"
   ["keycloak"]="$LATEST_BACKUP_DIR/keycloak.sql"
@@ -100,6 +117,7 @@ declare -A DATABASES=(
 
 echo ""
 echo -e "${YELLOW}Bases à restaurer (si fichier présent) :${NC}"
+echo ""
 for DB_NAME in "${!DATABASES[@]}"; do
   FILE_PATH="${DATABASES[$DB_NAME]}"
   if [ -f "$FILE_PATH" ]; then
@@ -120,13 +138,18 @@ fi
 # === Arrêt temporaire des services dépendants ===
 echo ""
 echo -e "${YELLOW}🛑 Arrêt des services FastAPI, Keycloak et OpenFGA...${NC}"
+echo ""
 docker compose stop fastapi keycloak openfga
 
 # === Démarrage de PostgreSQL seul ===
+echo ""
 echo "🟡 Démarrage temporaire de PostgreSQL pour la restauration..."
+echo ""
 docker compose up -d postgres
 
+echo ""
 echo "⏳ Attente de la disponibilité de PostgreSQL..."
+echo ""
 until docker exec postgres_ssl pg_isready -U postgres > /dev/null 2>&1; do
   sleep 2
 done
@@ -162,11 +185,13 @@ done
 # === Redémarrage des services dépendants ===
 echo ""
 echo -e "${GREEN}Redémarrage des services FastAPI, Keycloak et OpenFGA...${NC}"
+echo ""
 docker compose up -d fastapi keycloak openfga
 
 # === Résumé ===
 echo ""
 echo -e "${GREEN}✅ Restauration terminée. Résumé :${NC}"
+echo ""
 for DB_NAME in "${!DATABASES[@]}"; do
   echo -e " - $DB_NAME : ${STATUS[$DB_NAME]}"
 done
@@ -185,7 +210,7 @@ if [ -f "$OPENFGA_SQL_FILE" ]; then
     echo -e "${YELLOW}Mise à jour de $ENV_FILE avec FGA_STORE_ID=$RESTORED_STORE_ID...${NC}"
     if grep -Eq "^FGA_STORE_ID\s*=" "$ENV_FILE"; then
       sed -i.bak -E "s/^FGA_STORE_ID\s*=.*/FGA_STORE_ID=$RESTORED_STORE_ID/" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
-      echo -e "${GREEN}🔁 Variable FGA_STORE_ID mise à jour dans $ENV_FILE${NC}"
+      echo -e "${GREEN}✅ Variable FGA_STORE_ID mise à jour dans $ENV_FILE${NC}"
     else
       echo -e "\nFGA_STORE_ID=$RESTORED_STORE_ID" >> "$ENV_FILE"
       echo -e "${GREEN}➕ Variable FGA_STORE_ID ajoutée à $ENV_FILE${NC}"
