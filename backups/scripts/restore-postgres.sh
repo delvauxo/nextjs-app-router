@@ -231,27 +231,32 @@ for DB_NAME in "${!DATABASES[@]}"; do
 done
 
 # === Synchronisation automatique du FGA_STORE_ID restauré ===
-echo ""
-echo -e "${BLUE}🔄 Synchronisation de FGA_STORE_ID depuis le fichier de backup openfga.sql...${NC}"
+if [[ -n "${STATUS["openfga"]+x}" ]]; then
+  echo ""
+  echo -e "${BLUE}🔄 Synchronisation de FGA_STORE_ID depuis la base restaurée 'openfga'...${NC}"
 
-OPENFGA_SQL_FILE="$LATEST_BACKUP_DIR/openfga.sql"
+  OPENFGA_SQL_FILE="$LATEST_BACKUP_DIR/openfga.sql"
 
-if [ -f "$OPENFGA_SQL_FILE" ]; then
-  RESTORED_STORE_ID=$(awk '/^COPY public.store / {getline; print $1}' "$OPENFGA_SQL_FILE" | grep -E '^[0-9A-Z]{26}$' | head -n 1 || true)
+  if [ -f "$OPENFGA_SQL_FILE" ]; then
+    RESTORED_STORE_ID=$(awk '/^COPY public.store / {getline; print $1}' "$OPENFGA_SQL_FILE" | grep -E '^[0-9A-Z]{26}$' | head -n 1 || true)
 
-  if [ -n "$RESTORED_STORE_ID" ]; then
-    echo -e "${GREEN}✅ Store restauré détecté : $RESTORED_STORE_ID${NC}"
-    echo -e "${YELLOW}✏️ Mise à jour de ${MAGENTA}$ENV_FILE${YELLOW} avec FGA_STORE_ID=$RESTORED_STORE_ID...${NC}"
-    if grep -Eq "^FGA_STORE_ID\s*=" "$ENV_FILE"; then
-      sed -i.bak -E "s/^FGA_STORE_ID\s*=.*/FGA_STORE_ID=$RESTORED_STORE_ID/" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
-      echo -e "${GREEN}✅ Variable FGA_STORE_ID mise à jour dans ${MAGENTA}$ENV_FILE${NC}"
+    if [ -n "$RESTORED_STORE_ID" ]; then
+      echo -e "${GREEN}✅ Store restauré détecté : $RESTORED_STORE_ID${NC}"
+      echo -e "${YELLOW}✏️ Mise à jour de ${MAGENTA}$ENV_FILE${YELLOW} avec FGA_STORE_ID=$RESTORED_STORE_ID...${NC}"
+      if grep -Eq "^FGA_STORE_ID\s*=" "$ENV_FILE"; then
+        sed -i.bak -E "s/^FGA_STORE_ID\s*=.*/FGA_STORE_ID=$RESTORED_STORE_ID/" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+        echo -e "${GREEN}✅ Variable FGA_STORE_ID mise à jour dans ${MAGENTA}$ENV_FILE${NC}"
+      else
+        echo -e "\nFGA_STORE_ID=$RESTORED_STORE_ID" >> "$ENV_FILE"
+        echo -e "${GREEN}➕ Variable FGA_STORE_ID ajoutée à ${MAGENTA}$ENV_FILE${NC}"
+      fi
     else
-      echo -e "\nFGA_STORE_ID=$RESTORED_STORE_ID" >> "$ENV_FILE"
-      echo -e "${GREEN}➕ Variable FGA_STORE_ID ajoutée à $ENV_FILE${NC}"
+      echo -e "${RED}⚠️ Aucun store valide trouvé dans $OPENFGA_SQL_FILE. FGA_STORE_ID non modifié.${NC}"
     fi
   else
-    echo -e "${RED}⚠️ Aucun store valide trouvé dans $OPENFGA_SQL_FILE. FGA_STORE_ID non modifié.${NC}"
+    echo -e "${RED}⚠️ Fichier $OPENFGA_SQL_FILE introuvable. FGA_STORE_ID non modifié.${NC}"
   fi
 else
-  echo -e "${RED}⚠️ Fichier $OPENFGA_SQL_FILE introuvable. FGA_STORE_ID non modifié.${NC}"
+  echo ""
+  echo -e "${YELLOW}⏩ Base 'openfga' non restaurée, FGA_STORE_ID inchangé.${NC}"
 fi
