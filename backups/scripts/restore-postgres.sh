@@ -5,12 +5,15 @@ set -euo pipefail
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
+BLUE='\033[1;34m'
+CYAN='\033[1;36m'
+MAGENTA='\033[1;35m'
 NC='\033[0m'
 
 # === Détection de l’environnement ===
 APP_ENV=${APP_ENV:-local}
 echo ""
-echo -e "Environnement détecté : ${YELLOW}${APP_ENV}${NC}"
+echo -e "${BLUE}🔍 Environnement détecté :${NC} ${YELLOW}${APP_ENV}${NC}"
 
 if [ "$APP_ENV" = "production" ]; then
   echo -e "${RED}⚠️⚠️⚠️ Attention : script exécuté en environnement de production !${NC}"
@@ -73,11 +76,11 @@ PGPASS_FILE="$SCRIPT_DIR/.pgpass"
 echo "$POSTGRES_HOST:$POSTGRES_PORT:*:$POSTGRES_USER:$POSTGRES_PASSWORD" > "$PGPASS_FILE"
 chmod 600 "$PGPASS_FILE"
 export PGPASSFILE="$PGPASS_FILE"
-echo -e "${GREEN}Fichier .pgpass temporaire généré${NC}"
+echo -e "${GREEN}✅ Fichier .pgpass temporaire généré${NC}"
 
 cleanup_pgpass() {
   rm -f "$PGPASS_FILE"
-  echo -e "${GREEN}Fichier .pgpass temporaire supprimé${NC}"
+  echo -e "${GREEN}✅ Fichier .pgpass temporaire supprimé${NC}"
   echo ""
 }
 trap cleanup_pgpass EXIT
@@ -92,24 +95,25 @@ if [ ${#BACKUP_DIRS[@]} -eq 0 ]; then
 fi
 
 echo ""
-echo -e "${YELLOW}Dossiers de backup disponibles :${NC}"
+echo -e "${BLUE}📁 Dossiers de backup disponibles :${NC}"
 echo ""
 
 OPTIONS=("${BACKUP_DIRS[@]##*/}" "Annuler")
 
+echo -e "${CYAN}➤ Choisis un dossier avec son numéro :${NC}"
 select DIR_NAME in "${OPTIONS[@]}"; do
   if [ "$DIR_NAME" = "Annuler" ]; then
     echo ""
-    echo -e "${RED}Opération annulée.${NC}"
+    echo -e "${RED}❌ Opération annulée.${NC}"
     exit 0
   elif [ -n "$DIR_NAME" ]; then
     SELECTED_BACKUP_DIR="$BACKUPS_DIR/$DIR_NAME"
     echo ""
-    echo -e "Dossier sélectionné : ${GREEN}$SELECTED_BACKUP_DIR${NC}"
+    echo -e "${GREEN}✅ Dossier sélectionné : ${MAGENTA}$SELECTED_BACKUP_DIR${NC}"
     break
   else
     echo ""
-    echo -e "${RED}Sélection invalide. Choisis un numéro valide.${NC}"
+    echo -e "${RED}⛔ Sélection invalide. Choisis un numéro valide.${NC}"
   fi
 done
 
@@ -124,20 +128,21 @@ declare -A DATABASES=(
 declare -A DATABASES_TO_RESTORE=()
 
 echo ""
-echo -e "${YELLOW}Bases à restaurer détectées :${NC}"
+echo -e "${BLUE}💾 Bases à restaurer détectées :${NC}"
 echo ""
 for DB_NAME in "${!DATABASES[@]}"; do
   FILE_PATH="${DATABASES[$DB_NAME]}"
   if [ -f "$FILE_PATH" ]; then
-    echo -e " - ${GREEN}$DB_NAME${NC} ✔ ($FILE_PATH)"
+    echo -e " - ${GREEN}$DB_NAME${NC} ✔  ${MAGENTA}($FILE_PATH)${NC}"
   else
-    echo -e " - ${YELLOW}$DB_NAME${NC} ⚠ (fichier absent)"
+    echo -e " - ${YELLOW}$DB_NAME${NC} ⚠  ${MAGENTA}($FILE_PATH)${NC}"
   fi
-
 done
 
 echo ""
-read -rp "➤ Tout restaurer sans sélection individuelle ? (Y/n) : " FULL_RESTORE
+echo -ne "${CYAN}➤ Tout restaurer sans sélection individuelle ? (Y/n) : ${NC}"
+read -r FULL_RESTORE
+
 FULL_RESTORE=${FULL_RESTORE:-y}
 
 for DB_NAME in "${!DATABASES[@]}"; do
@@ -146,7 +151,8 @@ for DB_NAME in "${!DATABASES[@]}"; do
     if [[ "$FULL_RESTORE" == "y" || "$FULL_RESTORE" == "Y" ]]; then
       DATABASES_TO_RESTORE["$DB_NAME"]="$FILE_PATH"
     else
-      read -rp "   ➤ Restaurer la base '$DB_NAME' ? (Y/n) : " CHOICE
+      echo -ne "${CYAN}   ➤ Restaurer la base ${NC}$DB_NAME${CYAN} ? (Y/n) : ${NC}"
+      read -r CHOICE
       CHOICE=${CHOICE:-y}
       if [[ "$CHOICE" == "y" || "$CHOICE" == "Y" ]]; then
         DATABASES_TO_RESTORE["$DB_NAME"]="$FILE_PATH"
@@ -155,7 +161,6 @@ for DB_NAME in "${!DATABASES[@]}"; do
       fi
     fi
   fi
-
 done
 
 if [ ${#DATABASES_TO_RESTORE[@]} -eq 0 ]; then
@@ -166,27 +171,27 @@ fi
 
 # === Arrêt temporaire des services dépendants ===
 echo ""
-echo -e "${YELLOW}🛑 Arrêt des services FastAPI, Keycloak et OpenFGA...${NC}"
+echo -e "${BLUE}🛑 Arrêt des services FastAPI, Keycloak et OpenFGA...${NC}"
 echo ""
 docker compose stop fastapi keycloak openfga
 
 # === Démarrage de PostgreSQL seul ===
 echo ""
-echo "🟡 Démarrage temporaire de PostgreSQL pour la restauration..."
+echo -e "${BLUE}🟡 Démarrage temporaire de PostgreSQL pour la restauration...${NC}"
 echo ""
 docker compose up -d postgres
 
 echo ""
-echo "⏳ Attente de la disponibilité de PostgreSQL..."
+echo -e "${CYAN}⏳ Attente de la disponibilité de PostgreSQL...${NC}"
 echo ""
 until docker exec postgres_ssl pg_isready -U postgres > /dev/null 2>&1; do
   sleep 2
 done
-echo "✅ PostgreSQL est prêt."
+echo -e "${GREEN}✅ PostgreSQL est prêt.${NC}"
 
 # === Restauration ===
 echo ""
-echo -e "${YELLOW}Démarrage de la restauration...${NC}"
+echo -e "${BLUE}🚀 Démarrage de la restauration...${NC}"
 echo ""
 
 declare -A STATUS
@@ -199,23 +204,23 @@ for DB_NAME in "${!DATABASES_TO_RESTORE[@]}"; do
   FROM pg_stat_activity
   WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();
   "
-  echo -e "${YELLOW}Suppression + recréation de la base '$DB_NAME'...${NC}"
+  echo -e "${YELLOW}🔄 Suppression + recréation de la base '$DB_NAME'...${NC}"
   dropdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" --if-exists "$DB_NAME"
   createdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$DB_NAME"
-  echo -e "${YELLOW}Restauration depuis le fichier : $FILE_PATH${NC}"
+  echo -e "${YELLOW}📥 Restauration depuis le fichier : ${MAGENTA}$FILE_PATH${NC}"
   psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$DB_NAME" -f "$FILE_PATH"
   STATUS["$DB_NAME"]="${GREEN}✅ Restaurée${NC}"
 done
 
 # === Redémarrage des services dépendants ===
 echo ""
-echo -e "${GREEN}Redémarrage des services FastAPI, Keycloak et OpenFGA...${NC}"
+echo -e "${BLUE}🔁 Redémarrage des services FastAPI, Keycloak et OpenFGA...${NC}"
 echo ""
 docker compose up -d fastapi keycloak openfga
 
 # === Résumé ===
 echo ""
-echo -e "${GREEN}✅ Restauration terminée. Résumé :${NC}"
+echo -e "${BLUE}✅ Restauration terminée. Résumé :${NC}"
 echo ""
 for DB_NAME in "${!DATABASES[@]}"; do
   if [[ -n "${STATUS[$DB_NAME]+x}" ]]; then
@@ -227,7 +232,7 @@ done
 
 # === Synchronisation automatique du FGA_STORE_ID restauré ===
 echo ""
-echo -e "${YELLOW}Synchronisation de FGA_STORE_ID depuis le fichier de backup openfga.sql...${NC}"
+echo -e "${BLUE}🔄 Synchronisation de FGA_STORE_ID depuis le fichier de backup openfga.sql...${NC}"
 
 OPENFGA_SQL_FILE="$LATEST_BACKUP_DIR/openfga.sql"
 
@@ -236,10 +241,10 @@ if [ -f "$OPENFGA_SQL_FILE" ]; then
 
   if [ -n "$RESTORED_STORE_ID" ]; then
     echo -e "${GREEN}✅ Store restauré détecté : $RESTORED_STORE_ID${NC}"
-    echo -e "${YELLOW}Mise à jour de $ENV_FILE avec FGA_STORE_ID=$RESTORED_STORE_ID...${NC}"
+    echo -e "${YELLOW}✏️ Mise à jour de ${MAGENTA}$ENV_FILE${YELLOW} avec FGA_STORE_ID=$RESTORED_STORE_ID...${NC}"
     if grep -Eq "^FGA_STORE_ID\s*=" "$ENV_FILE"; then
       sed -i.bak -E "s/^FGA_STORE_ID\s*=.*/FGA_STORE_ID=$RESTORED_STORE_ID/" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
-      echo -e "${GREEN}✅ Variable FGA_STORE_ID mise à jour dans $ENV_FILE${NC}"
+      echo -e "${GREEN}✅ Variable FGA_STORE_ID mise à jour dans ${MAGENTA}$ENV_FILE${NC}"
     else
       echo -e "\nFGA_STORE_ID=$RESTORED_STORE_ID" >> "$ENV_FILE"
       echo -e "${GREEN}➕ Variable FGA_STORE_ID ajoutée à $ENV_FILE${NC}"
