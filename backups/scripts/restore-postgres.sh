@@ -117,6 +117,18 @@ select DIR_NAME in "${OPTIONS[@]}"; do
   fi
 done
 
+# === Proposition de backup préventif ===
+echo ""
+echo -ne "${CYAN}➤ Souhaites-tu faire un backup de l'état actuel avant la restauration ? (Y/n) : ${NC}"
+read -r DO_BACKUP
+DO_BACKUP=${DO_BACKUP:-y}
+
+if [[ "$DO_BACKUP" == "y" || "$DO_BACKUP" == "Y" ]]; then
+  echo ""
+  echo -e "${YELLOW}Lancement du script de backup avant restauration...${NC}"
+  bash "$SCRIPT_DIR/backup-postgres.sh"
+fi
+
 # === Bases à restaurer et sélection interactive ===
 LATEST_BACKUP_DIR="$SELECTED_BACKUP_DIR"
 declare -A DATABASES=(
