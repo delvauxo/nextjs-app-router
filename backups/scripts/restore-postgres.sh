@@ -101,6 +101,7 @@ echo ""
 OPTIONS=("${BACKUP_DIRS[@]##*/}" "Annuler")
 
 echo -e "${CYAN}➤ Choisis un dossier avec son numéro :${NC}"
+echo ""
 select DIR_NAME in "${OPTIONS[@]}"; do
   if [ "$DIR_NAME" = "Annuler" ]; then
     echo ""
