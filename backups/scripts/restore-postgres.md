@@ -12,6 +12,7 @@ Restaurer automatiquement les bases PostgreSQL du projet (API principale, Keyclo
 - arrêt des services dépendants (FastAPI, Keycloak, OpenFGA)
 - sélection du dossier de backup
 - choix individuel ou global des bases à restaurer
+- confirmation avant exécution critique
 - restauration propre des bases
 - redémarrage des services
 - mise à jour dynamique de `FGA_STORE_ID` dans le fichier `.env`
@@ -90,6 +91,10 @@ Cela permet de sécuriser les données actuelles en cas d’erreur ou de mauvais
 
 - Si tous les fichiers `.sql` sont présents, on peut restaurer toutes les bases d’un coup (`Y/n`)
 - Sinon, sélection individuelle par base, avec chemin affiché
+
+### 6. Confirmation avant exécution critique
+
+Avant de lancer la suppression et la restauration des bases sélectionnées, le script affiche un résumé clair des bases concernées ainsi que leur chemin SQL associé, puis demande une confirmation explicite
 
 ### 6. Arrêt automatique des services dépendants
 
@@ -182,6 +187,7 @@ grep FGA_STORE_ID .env.local
 - ✔ Robustesse : détection environnement + validation des variables
 - ✔ Arrêt/redémarrage automatique des services Docker concernés
 - ✔ Proposition de backup préventif avant restauration
+- ✔ Confirmation avant exécution critique
 
 ---
 

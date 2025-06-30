@@ -181,6 +181,24 @@ if [ ${#DATABASES_TO_RESTORE[@]} -eq 0 ]; then
   exit 0
 fi
 
+# === Confirmation finale avant suppression/restauration des bases sélectionnées ===
+echo ""
+echo -e "${RED}⚠️ Attention : les bases suivantes vont être SUPPRIMÉES puis RESTAURÉES :${NC}"
+echo ""
+for DB_NAME in "${!DATABASES_TO_RESTORE[@]}"; do
+  echo -e " - $DB_NAME"
+done
+echo ""
+echo -ne "${CYAN}➤ Confirmer la restauration ? (y/N) : ${NC}"
+read -r CONFIRM_RESTORE
+CONFIRM_RESTORE=${CONFIRM_RESTORE:-n}
+
+if [[ "$CONFIRM_RESTORE" != "y" && "$CONFIRM_RESTORE" != "Y" ]]; then
+  echo ""
+  echo -e "${RED}❌ Restauration annulée par l’utilisateur.${NC}"
+  exit 0
+fi
+
 # === Arrêt temporaire des services dépendants ===
 echo ""
 echo -e "${BLUE}🛑 Arrêt des services FastAPI, Keycloak et OpenFGA...${NC}"
