@@ -96,14 +96,14 @@ Cela permet de sécuriser les données actuelles en cas d’erreur ou de mauvais
 
 Avant de lancer la suppression et la restauration des bases sélectionnées, le script affiche un résumé clair des bases concernées ainsi que leur chemin SQL associé, puis demande une confirmation explicite
 
-### 6. Arrêt automatique des services dépendants
+### 7. Arrêt automatique des services dépendants
 
 Avant restauration :
 ```bash
 docker compose stop fastapi keycloak openfga
 ```
 
-### 7. Démarrage de PostgreSQL seul
+### 8. Démarrage de PostgreSQL seul
 
 ```bash
 docker compose up -d postgres
@@ -111,20 +111,20 @@ docker compose up -d postgres
 
 Attente active de disponibilité via `pg_isready`.
 
-### 8. Restauration
+### 9. Restauration
 
 Pour chaque base sélectionnée :
 - Déconnexion des connexions actives (`pg_terminate_backend`)
 - `dropdb` + `createdb`
 - Restauration avec `psql -f`
 
-### 9. Redémarrage des services
+### 10. Redémarrage des services
 
 ```bash
 docker compose up -d fastapi keycloak openfga
 ```
 
-### 10. Mise à jour du `FGA_STORE_ID`
+### 11. Mise à jour du `FGA_STORE_ID`
 
 Si la base `openfga` a été restaurée :
 - Le script extrait le Store ID depuis `openfga.sql`
