@@ -1,8 +1,3 @@
-# Restore PostgreSQL - Documentation Complète
-
-Ce document décrit le fonctionnement, les exigences, la sécurité et l'utilisation du script `restore-postgres.sh` conçu pour restaurer les bases de données PostgreSQL de l'application Parkigo.
-
----
 
 # Restore PostgreSQL - Documentation Complète
 
@@ -15,6 +10,8 @@ Ce document décrit le fonctionnement, les exigences, la sécurité et l'utilisa
 Restaurer automatiquement les bases PostgreSQL du projet (API principale, Keycloak, OpenFGA) à partir des dumps SQL sauvegardés, avec :
 
 - arrêt des services dépendants (FastAPI, Keycloak, OpenFGA)
+- sélection du dossier de backup
+- choix individuel ou global des bases à restaurer
 - restauration propre des bases
 - redémarrage des services
 - mise à jour dynamique de `FGA_STORE_ID` dans le fichier `.env`
@@ -42,10 +39,10 @@ POSTGRES_DATABASE=
 FGA_STORE_ID=  # optionnel : sera mis à jour automatiquement
 ```
 
-### Outils
+### Outils nécessaires
 
 - `bash`, `psql`, `dropdb`, `createdb`
-- Docker / Docker Compose (pour arrêter/redémarrer les services)
+- Docker / Docker Compose
 
 ### Rendre le script exécutable (si ce n’est pas déjà fait)
 
@@ -55,51 +52,81 @@ chmod +x ./backups/scripts/restore-postgres.sh
 
 ---
 
-## ⚖️ Sécurité : gestion du mot de passe PostgreSQL
+## 🔐 Sécurité : gestion du mot de passe PostgreSQL
 
-Le mot de passe n'est **pas exporté dans le shell**. Un fichier `.pgpass` temporaire est généré dans le même dossier que le script avec les permissions `600`, supprimé à la fin du script automatiquement.
+Le mot de passe est stocké temporairement dans un fichier `.pgpass` sécurisé (permissions 600), supprimé automatiquement à la fin du script.
 
+---
+
+## 🔄 Fonctionnement détaillé
+
+### 1. Détection de l'environnement
+
+Le script lit `APP_ENV` (`local` par défaut) et sélectionne le fichier `.env` approprié :
+- `.env.local` pour local/dev
+- `.env.production` pour production
+
+### 2. Extraction des variables PostgreSQL
+
+Les variables suivantes doivent être présentes dans le fichier `.env` :
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_HOST`
+- `POSTGRES_PORT`
+- `POSTGRES_DATABASE`
+
+### 3. Sélection du dossier de backup
+
+Tous les sous-dossiers de `./backups/` sont listés, sauf `scripts/`. L’utilisateur choisit un dossier contenant les dumps `.sql`.
+
+### 4. Sélection des bases à restaurer
+
+- Si tous les fichiers `.sql` sont présents, on peut restaurer toutes les bases d’un coup (`Y/n`)
+- Sinon, sélection individuelle par base, avec chemin affiché
+
+### 5. Arrêt automatique des services dépendants
+
+Avant restauration :
 ```bash
-PGPASS_FILE="$SCRIPT_DIR/.pgpass"
-echo "$POSTGRES_HOST:$POSTGRES_PORT:*:$POSTGRES_USER:$POSTGRES_PASSWORD" > "$PGPASS_FILE"
-chmod 600 "$PGPASS_FILE"
-export PGPASSFILE="$PGPASS_FILE"
-trap 'rm -f "$PGPASS_FILE"' EXIT
+docker compose stop fastapi keycloak openfga
 ```
 
+### 6. Démarrage de PostgreSQL seul
+
+```bash
+docker compose up -d postgres
+```
+
+Attente active de disponibilité via `pg_isready`.
+
+### 7. Restauration
+
+Pour chaque base sélectionnée :
+- Déconnexion des connexions actives (`pg_terminate_backend`)
+- `dropdb` + `createdb`
+- Restauration avec `psql -f`
+
+### 8. Redémarrage des services
+
+```bash
+docker compose up -d fastapi keycloak openfga
+```
+
+### 9. Mise à jour du `FGA_STORE_ID`
+
+Si la base `openfga` a été restaurée :
+- Le script extrait le Store ID depuis `openfga.sql`
+- Il met à jour (ou ajoute) `FGA_STORE_ID` dans le fichier `.env`
+
 ---
 
-## 🔄 Fonctionnement global
-
-### 1. Lecture de l'environnement
-
-- Détection du fichier `.env.local` ou `.env.production` selon `APP_ENV`
-- Extraction des variables PostgreSQL
-
-### 2. Sélection du dernier dossier de backup
-
-- Chemin : `./backups/YYYY-MM-DD_HH-MM-SS`
-
-### 3. Restauration de chaque base si le fichier SQL correspondant existe
-
-- Suppression de la base existante
-- Recréation
-- Restauration via `psql -f`
-
-### 4. Mise à jour automatique du `FGA_STORE_ID`
-
-- Extraction de l'ID de store le plus utilisé dans la table `tuple` (via `GROUP BY store ORDER BY COUNT(*) DESC`)
-- Mise à jour du fichier `.env.local` (ou `.env.production`)
-
----
-
-## 🚧 Commande pour lancer la restauration
+## 🚀 Commande de lancement
 
 ```bash
 ./backups/scripts/restore-postgres.sh
 ```
 
-### Optionnel : forcer un environnement spécifique
+### Forcer un environnement spécifique
 
 ```bash
 APP_ENV=production ./backups/scripts/restore-postgres.sh
@@ -107,19 +134,15 @@ APP_ENV=production ./backups/scripts/restore-postgres.sh
 
 ---
 
-## ⚠️ Risques et bonnes pratiques
+## ⚠️ Bonnes pratiques & recommandations
 
-- **Jamais lancer en production sans vérifier les fichiers de backup**.
-- Toujours utiliser un `docker compose down -v` si vous voulez une restauration **propre** sans conflit avec des stores existants (OpenFGA).
-- Attention aux **collisions d'identifiants** dans OpenFGA si le store ID change mais que le dump contient d’autres ID.
-
----
-
-## 🪤 Tips & recommandations
-
-- Le script est **idempotent** : relancer deux fois sans changement de dump ne modifie rien.
-- En cas de doute sur l'état de votre backup : inspectez `openfga.sql` et `keycloak.sql` manuellement.
-- Vous pouvez vérifier la mise à jour effective du `FGA_STORE_ID` dans `.env.local` avec :
+- **Ne jamais lancer en production sans avoir validé les dumps.**
+- Pour une restauration propre :
+  ```bash
+  docker compose down -v
+  ```
+- Vérifie manuellement les fichiers `.sql` si besoin.
+- Inspecte la mise à jour de `FGA_STORE_ID` dans le `.env` :
 
 ```bash
 grep FGA_STORE_ID .env.local
@@ -127,7 +150,7 @@ grep FGA_STORE_ID .env.local
 
 ---
 
-## 📃 Exemple de structure de dossier
+## 📦 Exemple de structure de dossier
 
 ```
 .
@@ -144,18 +167,17 @@ grep FGA_STORE_ID .env.local
 
 ---
 
-## 📅 Historique des améliorations
+## ✅ Historique des améliorations
 
-- ✅ Ajout d’un `.pgpass` temporaire pour éviter `PGPASSWORD`
-- ✅ Synchronisation dynamique de `FGA_STORE_ID` à partir de la table `tuple`
-- ✅ Validation des variables obligatoires
-- ✅ Sécurité renforcée pour les environnements de production
+- ✔ Ajout d’un `.pgpass` temporaire sécurisé
+- ✔ Sélection interactive des dossiers et bases
+- ✔ Mise à jour dynamique de `FGA_STORE_ID` uniquement si `openfga` est restaurée
+- ✔ Robustesse : détection environnement + validation des variables
+- ✔ Arrêt/redémarrage automatique des services Docker concernés
 
 ---
 
-## 🎉 That's it!
+## 🎉 C’est prêt !
 
-Vous pouvez maintenant restaurer tes bases PostgreSQL en toute confiance 🚀
-
-Pour toute modification future, pense à bien tester avec un `docker compose down -v` + `./backups/scripts/restore-postgres.sh` complet.
-
+Tu peux restaurer tes bases en toute confiance 🚀  
+Et en cas de doute : relance un `docker compose down -v` pour repartir de zéro.
