@@ -15,6 +15,7 @@ Restaurer automatiquement les bases PostgreSQL du projet (API principale, Keyclo
 - restauration propre des bases
 - redémarrage des services
 - mise à jour dynamique de `FGA_STORE_ID` dans le fichier `.env`
+- proposition de faire un backup complet avant restauration pour plus de sécurité
 
 ---
 
@@ -79,19 +80,25 @@ Les variables suivantes doivent être présentes dans le fichier `.env` :
 
 Tous les sous-dossiers de `./backups/` sont listés, sauf `scripts/`. L’utilisateur choisit un dossier contenant les dumps `.sql`.
 
-### 4. Sélection des bases à restaurer
+### 4. Arrêt automatique des services dépendants
+
+Avant de procéder à la restauration, le script propose à l’utilisateur de faire un backup complet de l’état actuel des bases.
+
+Cela permet de sécuriser les données actuelles en cas d’erreur ou de mauvaise manipulation pendant la restauration.
+
+### 5. Sélection des bases à restaurer
 
 - Si tous les fichiers `.sql` sont présents, on peut restaurer toutes les bases d’un coup (`Y/n`)
 - Sinon, sélection individuelle par base, avec chemin affiché
 
-### 5. Arrêt automatique des services dépendants
+### 6. Arrêt automatique des services dépendants
 
 Avant restauration :
 ```bash
 docker compose stop fastapi keycloak openfga
 ```
 
-### 6. Démarrage de PostgreSQL seul
+### 7. Démarrage de PostgreSQL seul
 
 ```bash
 docker compose up -d postgres
@@ -99,20 +106,20 @@ docker compose up -d postgres
 
 Attente active de disponibilité via `pg_isready`.
 
-### 7. Restauration
+### 8. Restauration
 
 Pour chaque base sélectionnée :
 - Déconnexion des connexions actives (`pg_terminate_backend`)
 - `dropdb` + `createdb`
 - Restauration avec `psql -f`
 
-### 8. Redémarrage des services
+### 9. Redémarrage des services
 
 ```bash
 docker compose up -d fastapi keycloak openfga
 ```
 
-### 9. Mise à jour du `FGA_STORE_ID`
+### 10. Mise à jour du `FGA_STORE_ID`
 
 Si la base `openfga` a été restaurée :
 - Le script extrait le Store ID depuis `openfga.sql`
@@ -174,6 +181,7 @@ grep FGA_STORE_ID .env.local
 - ✔ Mise à jour dynamique de `FGA_STORE_ID` uniquement si `openfga` est restaurée
 - ✔ Robustesse : détection environnement + validation des variables
 - ✔ Arrêt/redémarrage automatique des services Docker concernés
+- ✔ Proposition de backup préventif avant restauration
 
 ---
 
