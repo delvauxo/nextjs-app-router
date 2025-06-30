@@ -80,7 +80,7 @@ Les variables suivantes doivent être présentes dans le fichier `.env` :
 
 Tous les sous-dossiers de `./backups/` sont listés, sauf `scripts/`. L’utilisateur choisit un dossier contenant les dumps `.sql`.
 
-### 4. Arrêt automatique des services dépendants
+### 4. Proposition de backup préventif
 
 Avant de procéder à la restauration, le script propose à l’utilisateur de faire un backup complet de l’état actuel des bases.
 
