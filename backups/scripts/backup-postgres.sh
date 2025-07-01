@@ -170,7 +170,7 @@ fi
 echo ""
 echo -e "${GREEN}✅ Sauvegarde terminée avec succès dans : ${MAGENTA}$BACKUP_DIR${NC}"
 
-# Affichage taille réelle des fichiers dumps
+# === Affichage taille réelle des fichiers dumps ===
 echo ""
 echo -e "${BLUE}📊 Tailles réelles des dumps :${NC}"
 echo ""
