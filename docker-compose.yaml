@@ -11,7 +11,7 @@ services:
     environment:
       POSTGRES_USER: delvauxo  # Nom d'utilisateur PostgreSQL par défaut
       POSTGRES_PASSWORD: yolo  # Mot de passe PostgreSQL
-      POSTGRES_DB: yolo  # Base de données initiale
+      POSTGRES_DB: parkigo  # Base de données initiale
     ports:
       - "5432:5432"  # Expose le port PostgreSQL pour accès local
     volumes:
@@ -26,7 +26,7 @@ services:
     networks:
       - openfga  # Connecté au réseau openfga
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "delvauxo", "-d", "yolo"]  # Vérifie que la DB est prête
+      test: ["CMD", "pg_isready", "-U", "delvauxo", "-d", "parkigo"]  # Vérifie que la DB est prête
       interval: 10s  # Fréquence de vérification
       retries: 5  # Nombre de tentatives avant échec
       timeout: 5s  # Timeout d'une tentative
