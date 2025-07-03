@@ -150,7 +150,6 @@ echo -e "${BLUE}🚀 Démarrage de la restauration...${NC}"
 echo ""
 
 declare -A STATUS
-declare -A MISSING_BY_DB
 
 for DB_NAME in "${!DATABASES_TO_RESTORE[@]}"; do
   FILE_PATH="${DATABASES_TO_RESTORE[$DB_NAME]}"
@@ -165,84 +164,23 @@ for DB_NAME in "${!DATABASES_TO_RESTORE[@]}"; do
   createdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$DB_NAME"
   echo -e "${YELLOW}📥 Restauration depuis le fichier : ${MAGENTA}$FILE_PATH${NC}"
   
-  RESTORE_SUCCESS=true
-  if ! psql --set=ON_ERROR_STOP=on -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$DB_NAME" -f "$FILE_PATH"; then
-    echo ""
-    echo -e "${RED}❌ Erreur lors de la restauration de la base '${YELLOW}$DB_NAME${RED}'.${NC}"
-    echo ""
-    echo -e "${RED}➡️ Vérifie le fichier de backup pour voir l’origine du problème : ${MAGENTA}$FILE_PATH${NC}"
-    RESTORE_SUCCESS=false
-  fi
-
-  # === Validation dynamique de la structure et du contenu post-restauration ===
-  echo ""
-  echo -e "${CYAN}🔍 Vérification de l’intégrité post-restauration de la base '${YELLOW}$DB_NAME${CYAN}'...${NC}"
-  echo ""
-
-  FAILED_VALIDATION=false
-  FOUND_TABLES=()
-  MISSING_TABLES=()
-  EMPTY_TABLES=()
-
-  for TABLE in assertion authorization_model changelog goose_db_version store tuple; do
-    # 1️⃣ Vérifier l’existence de la table
-    EXISTS=$(psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" \
-      -U "$POSTGRES_USER" -d "$DB_NAME" \
-      -tAc "SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename='${TABLE}';" | xargs)
-
-    if [[ "$EXISTS" != "1" ]]; then
-      MISSING_TABLES+=("$TABLE")
-      echo -e "${RED}❌ Table manquante après restauration : ${YELLOW}$TABLE${NC}"
-      FAILED_VALIDATION=true
-      continue
-    fi
-
-    FOUND_TABLES+=("$TABLE")
-
-    # 2️⃣ Vérifier si elle contient des lignes
-    ROW_COUNT=$(psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" \
-      -U "$POSTGRES_USER" -d "$DB_NAME" \
-      -tAc "SELECT count(*) FROM public.\"$TABLE\";" | xargs)
-
-    if [[ "$ROW_COUNT" -eq 0 ]]; then
-      EMPTY_TABLES+=("$TABLE")
-      echo -e "${YELLOW}⚠️ Table créée mais vide : ${TABLE}${NC}"
-      # pas de FAILED_VALIDATION ici, on autorise les tables vides
-    fi
-  done
-
-  # 3️⃣ Rapport synthétique pour cette base
-  echo ""
-  if [ ${#MISSING_TABLES[@]} -gt 0 ]; then
-    echo -e "${RED}📉 Tables totalement manquantes : ${YELLOW}${MISSING_TABLES[*]}${NC}"
-  fi
-  if [ ${#EMPTY_TABLES[@]} -gt 0 ]; then
-    echo -e "${YELLOW}⚠️ Tables vides : ${EMPTY_TABLES[*]}${NC}"
-  fi
-
-  # 4️⃣ Détermination du statut final
-  if [ ${#MISSING_TABLES[@]} -gt 0 ]; then
-    STATUS["$DB_NAME"]="${RED}❌ Restauration incomplète${NC}"
-  elif [[ "$RESTORE_SUCCESS" == true ]]; then
+  if psql --set=ON_ERROR_STOP=on -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$DB_NAME" -f "$FILE_PATH"; then
+    echo -e "${GREEN}✅ Restauration de la base '$DB_NAME' réussie.${NC}"
     STATUS["$DB_NAME"]="${GREEN}✅ Restaurée${NC}"
   else
-    STATUS["$DB_NAME"]="${RED}❌ Échec de la restauration (tables existantes)${NC}"
+    echo -e "${RED}❌ Erreur lors de la restauration de la base '${YELLOW}$DB_NAME${RED}'.${NC}"
+    STATUS["$DB_NAME"]="${RED}❌ Restauration échouée${NC}"
   fi
-
-  # 5️⃣ Conserver la liste des tables manquantes pour le résumé final
-  MISSING_BY_DB["$DB_NAME"]="${MISSING_TABLES[*]}"
-
   echo ""
-
 done
-
 
 # === Redémarrage des services dépendants ===
 echo ""
 echo -e "${BLUE}🔁 Redémarrage des services FastAPI, Keycloak et OpenFGA...${NC}"
 echo ""
 if ! docker compose up -d fastapi keycloak openfga; then
-  echo -e "${YELLOW}⚠️ Certains services (ex: migrate) ont échoué à démarrer. La suite du script continue…${NC}"
+  echo ""
+  echo -e "${YELLOW}⚠️ Certains services ont échoué à démarrer. La suite du script continue…${NC}"
 fi
 
 # === Résumé ===
@@ -253,12 +191,6 @@ echo ""
 for DB_NAME in "${!DATABASES[@]}"; do
   STATUS_MSG=${STATUS[$DB_NAME]:-${YELLOW}⏩ Ignorée${NC}}
   echo -e " - ${DB_NAME} : ${STATUS_MSG}"
-  if [[ "${STATUS_MSG}" != *"✅ Restaurée"* ]]; then
-    MISSING="${MISSING_BY_DB[$DB_NAME]:-}"
-    if [[ -n "$MISSING" ]]; then
-      echo -e "     ${RED}📉 Tables manquantes:${NC} ${YELLOW}$MISSING${NC}"
-    fi
-  fi
 done
 
 # === Synchronisation automatique du FGA_STORE_ID restauré si la base openfga a été restaurée ===
