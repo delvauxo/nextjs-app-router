@@ -1,10 +1,17 @@
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
+# === Paramètres d'attente Keycloak ===
+MAX_ATTEMPTS=12
+SLEEP_SECONDS=5
+
 # === Détection de l’environnement ===
 detect_environment
 
 # === Choix du fichier .env selon APP_ENV ===
 load_env_variables
+
+# === Realm Keycloak ===
+REALM_NAME="${KEYCLOAK_REALM:-nextjs-dashboard}"
 
 # === Création conditionnelle du .pgpass ===
 if [[ -z "${PGPASSFILE-}" || ! -f "$PGPASSFILE" ]]; then
@@ -17,20 +24,57 @@ fi
 CONTAINER_NAME=postgres_ssl
 
 if ! docker ps --format '{{.Names}}' | grep -q "^$CONTAINER_NAME$"; then
+  echo ""
   echo -e "${YELLOW}🔄 Lancement du container PostgreSQL...${NC}"
+  echo ""
   docker compose up -d postgres
+  echo ""
   echo -e "${CYAN}⏳ Attente de la disponibilité de PostgreSQL...${NC}"
   until docker exec "$CONTAINER_NAME" pg_isready -U "$POSTGRES_USER" > /dev/null 2>&1; do sleep 2; done
+  echo ""
   echo -e "${GREEN}✅ PostgreSQL est prêt.${NC}"
 else
+  echo ""
   echo -e "${GREEN}✅ Container PostgreSQL déjà actif.${NC}"
+fi
+
+# === Vérification de la présence du fichier realm.json pour le montage ===
+REALM_FILE="./docker/keycloak/config/realm.json"
+
+if [[ ! -f "$REALM_FILE" ]]; then
+  echo ""
+  echo -e "${YELLOW}⚠️ Attention : le fichier realm.json n'existe pas (${REALM_FILE})."
+  echo -e "   Le montage du fichier dans le container Keycloak ne pourra pas se faire."
+  echo -e "   Keycloak démarrera sans import automatique de configuration.${NC}"
+  
+  # Optionnel : modifier dynamiquement le fichier docker-compose.yml ou docker-compose override 
+  # pour commenter le montage realm.json.
+else
+  echo -e "${GREEN}✅ Fichier realm.json détecté, import automatique possible.${NC}"
+fi
+
+# === Container Keycloak ===
+KC_CONTAINER=keycloak
+
+if ! docker ps --format '{{.Names}}' | grep -q "^$KC_CONTAINER$"; then
+  echo ""
+  echo -e "${YELLOW}🔄 Lancement du container Keycloak...${NC}"
+  echo ""
+  docker compose up -d keycloak
+else
+  echo -e "${GREEN}✅ Container Keycloak déjà actif.${NC}"
+fi
+
+# === Vérification du realm (avec attente progressive) ===
+if ! wait_for_realm_ready; then
+  exit 1
 fi
 
 # === Bases à sauvegarder ===
 DATABASES=("openfga" "$POSTGRES_DATABASE" "keycloak")
 
 echo ""
-echo -e "💾 ${BLUE}Liste des bases à sauvegarder :${NC}"
+echo -e "💾 ${BLUE}Liste des bases de données SQL à sauvegarder :${NC}"
 echo ""
 for db in "${DATABASES[@]}"; do
   echo -e "   - $db"
@@ -91,8 +135,6 @@ check_disk_space() {
 
   local free_gb
   free_gb=$(awk "BEGIN {printf \"%.1f\", $free_kb/1024/1024}")
-  local required_gb
-  required_gb=$(awk "BEGIN {printf \"%.2f\", $required_mb/1024}")
 
   echo ""
   echo -e "Espace requis : ${required_mb} Mo${NC}"
@@ -165,10 +207,8 @@ if docker exec -t "$CONTAINER_NAME" pg_dumpall -U "$POSTGRES_USER" > "$BACKUP_DI
   echo -e "${GREEN}✅ Dump global compressé : ${MAGENTA}full_postgres_dump.sql.gz${NC}"
 else
   echo -e "${RED}❌ Erreur lors du dump global${NC}"
+  exit 1
 fi
-
-echo ""
-echo -e "${GREEN}✅ Sauvegarde terminée avec succès dans : ${MAGENTA}$BACKUP_DIR${NC}"
 
 # === Affichage taille réelle des fichiers dumps ===
 echo ""
@@ -178,4 +218,39 @@ for DB in "${SELECTED_DATABASES[@]}"; do
   file_size=$(du -h "$BACKUP_DIR/$DB.sql" | cut -f1)
   echo -e "   - $DB ➜ $file_size"
 done
+
 echo ""
+echo -ne "${CYAN}➤ Exporter la configuration Keycloak (realm '$REALM_NAME') au format JSON ? (Y/n) : ${NC}"
+read -r EXPORT_REALM
+EXPORT_REALM=${EXPORT_REALM:-y}
+
+if [[ "$EXPORT_REALM" =~ ^[yY]$ ]]; then
+  if ! docker ps --format '{{.Names}}' | grep -q "^keycloak$"; then
+    echo -e "${YELLOW}⚠️ Le container 'keycloak' n'est pas actif, export Keycloak ignoré.${NC}"
+  elif ! check_realm_exists "$REALM_NAME"; then
+    echo -e "${RED}❌ Le realm '$REALM_NAME' n'existe PAS dans Keycloak.${NC}"
+    echo -e "${YELLOW}⚠️ Keycloak semble vierge ou non configuré.${NC}"
+    echo -e "${YELLOW}   Vérifiez que Keycloak est bien initialisé avec ce realm avant de faire l'export.${NC}"
+  else
+    echo -e "${YELLOW}📦 Export Keycloak realm '$REALM_NAME'...${NC}"
+    echo ""
+    if docker exec keycloak /opt/keycloak/bin/kc.sh export --realm "$REALM_NAME" --file /tmp/keycloak-realm.json; then
+      if docker exec keycloak test -f /tmp/keycloak-realm.json; then
+        docker cp keycloak:/tmp/keycloak-realm.json "$BACKUP_DIR/keycloak-realm.json" \
+          && echo "" \
+          && echo -e "${GREEN}✅ Export Keycloak sauvegardé dans : ${MAGENTA}$BACKUP_DIR/keycloak-realm.json${NC}" \
+          && docker exec keycloak rm /tmp/keycloak-realm.json \
+          || echo -e "${RED}❌ Erreur lors de la copie du fichier exporté Keycloak.${NC}"
+      else
+        echo -e "${YELLOW}⚠️ Fichier export Keycloak introuvable dans le container, export ignoré.${NC}"
+      fi
+    else
+      echo -e "${RED}❌ Erreur lors de l’export du realm Keycloak dans le container.${NC}"
+    fi
+  fi
+else
+  echo -e "${YELLOW}⚠️ Export Keycloak realm ignoré.${NC}"
+fi
+
+echo ""
+echo -e "${GREEN}✅ Sauvegarde terminée avec succès dans : ${MAGENTA}$BACKUP_DIR${NC}"

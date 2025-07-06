@@ -76,6 +76,18 @@ for DB_NAME in "${!DATABASES[@]}"; do
   fi
 done
 
+# === Import JSON realm Keycloak option ===
+KEYCLOAK_JSON_IMPORT_FILE="$LATEST_BACKUP_DIR/keycloak-realm.json"
+
+if [ -f "$KEYCLOAK_JSON_IMPORT_FILE" ]; then
+  echo ""
+  echo -ne "${CYAN}➤ Souhaites-tu importer le realm Keycloak via JSON (${MAGENTA}$KEYCLOAK_JSON_IMPORT_FILE${CYAN}) ? (Y/n) : ${NC}"
+  read -r IMPORT_KC_REALM
+  IMPORT_KC_REALM=${IMPORT_KC_REALM:-y}
+else
+  IMPORT_KC_REALM="n"
+fi
+
 echo ""
 echo -ne "${CYAN}➤ Tout restaurer sans sélection individuelle ? (Y/n) : ${NC}"
 read -r FULL_RESTORE
@@ -104,6 +116,18 @@ if [ ${#DATABASES_TO_RESTORE[@]} -eq 0 ]; then
   echo ""
   echo -e "${RED}❌ Aucune base sélectionnée pour la restauration. Opération annulée.${NC}"
   exit 0
+fi
+
+# === Import JSON realm Keycloak option ===
+KEYCLOAK_JSON_IMPORT_FILE="$LATEST_BACKUP_DIR/realm.json"
+
+if [ -f "$KEYCLOAK_JSON_IMPORT_FILE" ]; then
+  echo ""
+  echo -ne "${CYAN}➤ Souhaites-tu importer le realm Keycloak via JSON (${KEYCLOAK_JSON_IMPORT_FILE}) ? (Y/n) : ${NC}"
+  read -r IMPORT_KC_REALM
+  IMPORT_KC_REALM=${IMPORT_KC_REALM:-y}
+else
+  IMPORT_KC_REALM="n"
 fi
 
 # === Confirmation finale avant suppression/restauration des bases sélectionnées ===
@@ -144,6 +168,21 @@ until docker exec postgres_ssl pg_isready -U postgres > /dev/null 2>&1; do
 done
 echo -e "${GREEN}✅ PostgreSQL est prêt.${NC}"
 
+# === Import JSON realm Keycloak function ===
+import_keycloak_realm() {
+  local json_file="$1"
+  echo -e "${BLUE}🚀 Import du realm Keycloak depuis JSON...${NC}"
+
+  # Commande pour importer via CLI Keycloak (en mode développement)
+  docker exec -i keycloak /opt/keycloak/bin/kc.sh import --file /opt/keycloak/data/import/realm.json
+
+  if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Import du realm Keycloak réussi.${NC}"
+  else
+    echo -e "${RED}❌ Échec de l'import du realm Keycloak.${NC}"
+  fi
+}
+
 # === Restauration ===
 echo ""
 echo -e "${BLUE}🚀 Démarrage de la restauration...${NC}"
@@ -173,6 +212,23 @@ for DB_NAME in "${!DATABASES_TO_RESTORE[@]}"; do
   fi
   echo ""
 done
+
+# === Import JSON realm Keycloak ===
+if [[ "$IMPORT_KC_REALM" == "y" || "$IMPORT_KC_REALM" == "Y" ]]; then
+  echo ""
+  echo -e "${BLUE}🚀 Import du realm Keycloak depuis JSON...${NC}"
+
+  # Copie le fichier dans le bon répertoire du conteneur
+  docker cp "$KEYCLOAK_JSON_IMPORT_FILE" keycloak:/opt/keycloak/data/import/realm.json
+
+  # Redémarre Keycloak pour forcer l’import
+  docker compose restart keycloak
+
+  echo -e "${GREEN}✅ Realm JSON copié et Keycloak redémarré pour import automatique.${NC}"
+else
+  echo ""
+  echo -e "${YELLOW}⏩ Import du realm JSON ignoré.${NC}"
+fi
 
 # === Redémarrage des services dépendants ===
 echo ""
