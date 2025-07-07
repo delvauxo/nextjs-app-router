@@ -352,7 +352,17 @@ if [[ "$EXPORT_FGA_YAML" =~ ^[yY]$ ]]; then
     
     # Commande simplifiée pour exporter le store. La sortie standard est redirigée vers le fichier.
     # La sortie d'erreur est masquée (2>/dev/null) pour ne pas polluer le log en cas de succès.
-    if docker compose run --rm openfga-cli store export --store-id="$FGA_STORE_ID" --api-url=http://openfga:8080 > "$BACKUP_DIR/openfga-store.yaml" 2>/dev/null; then
+    # Execute the command, redirecting stdout to the target file and stderr to a temporary file
+    TEMP_ERR_FILE=$(mktemp)
+    if docker compose run --rm openfga-cli store export --store-id="$FGA_STORE_ID" --api-url=http://openfga:8080 > "$BACKUP_DIR/openfga-store.yaml" 2>"$TEMP_ERR_FILE"; then
+      FGA_EXPORT_EXIT_CODE=0
+    else
+      FGA_EXPORT_EXIT_CODE=$?
+    fi
+    FGA_ERROR_MESSAGE=$(cat "$TEMP_ERR_FILE")
+    rm "$TEMP_ERR_FILE" # Clean up the temporary file
+
+    if [ "$FGA_EXPORT_EXIT_CODE" -eq 0 ]; then
       # Vérifier si le fichier a bien été créé et n'est pas vide
       if [ -s "$BACKUP_DIR/openfga-store.yaml" ]; then
         echo -e "${GREEN}✅ Export OpenFGA store sauvegardé dans : ${MAGENTA}$BACKUP_DIR/openfga-store.yaml${NC}"
@@ -362,8 +372,14 @@ if [[ "$EXPORT_FGA_YAML" =~ ^[yY]$ ]]; then
         rm -f "$BACKUP_DIR/openfga-store.yaml" # Nettoyage du fichier vide
       fi
     else
-      echo -e "${RED}❌ Erreur lors de l'export du store OpenFGA.${NC}"
-      echo -e "${YELLOW}   Vérifiez que le service 'openfga-cli' est bien configuré et que le store ID est valide.${NC}"
+      if echo "$FGA_ERROR_MESSAGE" | grep -q "store_id_not_found"; then
+        echo -e "${RED}❌ Erreur : Le store OpenFGA avec l'ID '$FGA_STORE_ID' n'existe pas ou n'est pas accessible.${NC}"
+        echo -e "${YELLOW}   Veuillez vous assurer que le store est créé et que l'ID est correct.${NC}"
+      else
+        echo -e "${RED}❌ Erreur lors de l'export du store OpenFGA.${NC}"
+        echo -e "${YELLOW}   Détails de l'erreur :${NC}"
+        echo -e "${RED}$FGA_ERROR_MESSAGE${NC}"
+      fi
       rm -f "$BACKUP_DIR/openfga-store.yaml" # Nettoyage en cas d'erreur
     fi
   fi
