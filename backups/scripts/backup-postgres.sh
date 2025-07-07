@@ -336,5 +336,40 @@ else
   echo -e "${YELLOW}⚠️ Export Keycloak realm ignoré.${NC}"
 fi
 
+# === Export OpenFGA Store en YAML ===
+echo ""
+echo -ne "${CYAN}➤ Exporter le store OpenFGA au format YAML ? (Y/n) : ${NC}"
+read -r EXPORT_FGA_YAML
+EXPORT_FGA_YAML=${EXPORT_FGA_YAML:-y}
+
+if [[ "$EXPORT_FGA_YAML" =~ ^[yY]$ ]]; then
+  if ! docker ps --format '{{.Names}}' | grep -q "^openfga$"; then
+    echo -e "${YELLOW}⚠️ Le container 'openfga' n'est pas actif, export OpenFGA ignoré.${NC}"
+  elif [[ -z "$FGA_STORE_ID" ]]; then
+    echo -e "${RED}❌ La variable FGA_STORE_ID n'est pas définie. Export OpenFGA YAML ignoré.${NC}"
+  else
+    echo -e "${YELLOW}📦 Export OpenFGA store '$FGA_STORE_ID' en YAML...${NC}"
+    
+    # Commande simplifiée pour exporter le store. La sortie standard est redirigée vers le fichier.
+    # La sortie d'erreur est masquée (2>/dev/null) pour ne pas polluer le log en cas de succès.
+    if docker compose run --rm openfga-cli store export --store-id="$FGA_STORE_ID" --api-url=http://openfga:8080 > "$BACKUP_DIR/openfga-store.yaml" 2>/dev/null; then
+      # Vérifier si le fichier a bien été créé et n'est pas vide
+      if [ -s "$BACKUP_DIR/openfga-store.yaml" ]; then
+        echo -e "${GREEN}✅ Export OpenFGA store sauvegardé dans : ${MAGENTA}$BACKUP_DIR/openfga-store.yaml${NC}"
+      else
+        echo -e "${RED}❌ Erreur : L'export OpenFGA a produit un fichier vide.${NC}"
+        echo -e "${YELLOW}   Cela peut indiquer que le store avec l'ID '$FGA_STORE_ID' est vide ou n'existe pas.${NC}"
+        rm -f "$BACKUP_DIR/openfga-store.yaml" # Nettoyage du fichier vide
+      fi
+    else
+      echo -e "${RED}❌ Erreur lors de l'export du store OpenFGA.${NC}"
+      echo -e "${YELLOW}   Vérifiez que le service 'openfga-cli' est bien configuré et que le store ID est valide.${NC}"
+      rm -f "$BACKUP_DIR/openfga-store.yaml" # Nettoyage en cas d'erreur
+    fi
+  fi
+else
+  echo -e "${YELLOW}⚠️ Export OpenFGA store YAML ignoré.${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}✅ Sauvegarde terminée avec succès dans : ${MAGENTA}$BACKUP_DIR${NC}"

@@ -46,7 +46,7 @@ load_env_variables() {
   set +a
 
   # Vérification des variables critiques PostgreSQL
-  required_vars=("POSTGRES_USER" "POSTGRES_PASSWORD" "POSTGRES_HOST" "POSTGRES_PORT" "POSTGRES_DATABASE")
+  required_vars=("POSTGRES_USER" "POSTGRES_PASSWORD" "POSTGRES_HOST" "POSTGRES_PORT" "POSTGRES_DATABASE" "FGA_STORE_ID")
   missing_vars=()
 
   for var in "${required_vars[@]}"; do

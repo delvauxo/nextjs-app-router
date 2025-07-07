@@ -1,0 +1,25 @@
+# Étape 1 : builder le binaire fga CLI depuis Debian slim
+FROM debian:bookworm-slim AS fga-cli-builder
+
+# Installe curl et tar pour télécharger et extraire le binaire
+RUN apt-get update && apt-get install -y curl tar && rm -rf /var/lib/apt/lists/*
+
+# Télécharge et extrait la dernière release du CLI fga
+RUN curl -s https://api.github.com/repos/openfga/cli/releases/latest \
+  | grep "browser_download_url.*linux_amd64.tar.gz" \
+  | cut -d '"' -f 4 \
+  | xargs curl -L -o fga.tar.gz \
+  && tar -xzf fga.tar.gz \
+  && chmod +x fga
+
+# Étape 2 : créer une image ultra-light contenant juste le CLI
+FROM debian:bookworm-slim
+
+# Copie le binaire du builder vers l'image finale
+COPY --from=fga-cli-builder /fga /usr/local/bin/fga
+
+# Définit le dossier de travail
+WORKDIR /usr/local/bin
+
+# Commande par défaut (remplaçable lors d'un docker run)
+ENTRYPOINT ["fga"]
