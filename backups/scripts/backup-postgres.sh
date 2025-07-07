@@ -65,13 +65,97 @@ else
   echo -e "${GREEN}✅ Container Keycloak déjà actif.${NC}"
 fi
 
+# === Fonctions de vérification Keycloak (spécifiques à ce script) ===
+wait_for_realm_ready() {
+  local attempts=0
+  echo ""
+  echo -e "${CYAN}⏳ Vérification que le realm '${KEYCLOAK_REALM}' est disponible (attente max : $((MAX_ATTEMPTS * SLEEP_SECONDS))s)...${NC}"
+
+  until check_realm_exists "$KEYCLOAK_REALM"; do
+    exit_code=$?
+    ((attempts++))
+
+    case "$exit_code" in
+      0)
+        break # Succès, sortir de la boucle
+        ;;
+      1)
+        echo -e "${YELLOW}   - Tentative ${attempts}/${MAX_ATTEMPTS} : Impossible de contacter Keycloak ou identifiants admin invalides. Keycloak démarre peut-être...${NC}"
+        ;;
+      2)
+        echo -e "${YELLOW}   - Tentative ${attempts}/${MAX_ATTEMPTS} : Realm '${KEYCLOAK_REALM}' introuvable. Il n'a peut-être pas encore été importé.${NC}"
+        ;;
+      3)
+        echo -e "${RED}   - Tentative ${attempts}/${MAX_ATTEMPTS} : Erreur d'authentification (HTTP 401) en vérifiant le realm. Token invalide ?${NC}"
+        ;;
+      4)
+        echo -e "${RED}   - Tentative ${attempts}/${MAX_ATTEMPTS} : Erreur HTTP inattendue lors de la vérification du realm.${NC}"
+        ;;
+      *)
+        echo -e "${RED}   - Tentative ${attempts}/${MAX_ATTEMPTS} : Erreur inconnue (code $exit_code).${NC}"
+        ;;
+    esac
+
+    if [ "$attempts" -ge "$MAX_ATTEMPTS" ]; then
+      echo ""
+      echo -e "${RED}❌ Le realm '${KEYCLOAK_REALM}' est toujours indisponible après $((MAX_ATTEMPTS * SLEEP_SECONDS)) secondes.${NC}"
+      echo -e "${RED}   - Causes possibles : Keycloak non démarré, realm non importé, ou identifiants admin incorrects dans le .env.${NC}"
+      return 1
+    fi
+
+    sleep "$SLEEP_SECONDS"
+  done
+
+  echo ""
+  echo -e "${GREEN}✅ Le realm '${KEYCLOAK_REALM}' est prêt.${NC}"
+}
+
+check_realm_exists() {
+  if [[ -z "${1:-}" ]]; then
+    echo -e "${RED}❌ Paramètre manquant pour check_realm_exists : nom du realm attendu.${NC}"
+    return 255 # Code d'erreur interne
+  fi
+  local REALM_TO_CHECK="$1"
+
+  # 🔑 Récupérer le token d'accès admin
+  local TOKEN_RESPONSE
+  TOKEN_RESPONSE=$(curl -s -X POST "${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_ADMIN_REALM}/protocol/openid-connect/token" \
+    -d "client_id=${KEYCLOAK_ADMIN_CLIENT_ID}" \
+    -d "username=${KEYCLOAK_ADMIN_USERNAME}" \
+    -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
+    -d "grant_type=password")
+
+  local ACCESS_TOKEN
+  ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+
+  if [[ -z "$ACCESS_TOKEN" ]]; then
+    return 1
+  fi
+
+  # 🔍 Vérifier le realm
+  local HTTP_CODE
+  HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X GET \
+    -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+    "${KEYCLOAK_BASE_URL}/admin/realms/${REALM_TO_CHECK}")
+
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    return 0 # Succès
+  elif [[ "$HTTP_CODE" == "404" ]]; then
+    return 2 # Realm non trouvé
+  elif [[ "$HTTP_CODE" == "401" ]]; then
+    return 3 # Authentification échouée avec le token
+  else
+    return 4 # Autre erreur HTTP
+  fi
+}
+
 # === Vérification du realm (avec attente progressive) ===
 if ! wait_for_realm_ready; then
   exit 1
 fi
 
 # === Bases à sauvegarder ===
-DATABASES=("openfga" "$POSTGRES_DATABASE" "keycloak")
+DATABASES=("${DATABASES_TO_MANAGE[@]}")
 
 echo ""
 echo -e "💾 ${BLUE}Liste des bases de données SQL à sauvegarder :${NC}"

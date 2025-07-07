@@ -54,13 +54,12 @@ if [[ "$DO_BACKUP" == "y" || "$DO_BACKUP" == "Y" ]]; then
   bash "$SCRIPT_DIR/backup-postgres.sh"
 fi
 
-# === Bases à restaurer et sélection interactive ===
+# === Bases à restaurer et sélection interactive (depuis la liste centralisée) ===
 LATEST_BACKUP_DIR="$SELECTED_BACKUP_DIR"
-declare -A DATABASES=(
-  ["$POSTGRES_DATABASE"]="$LATEST_BACKUP_DIR/$POSTGRES_DATABASE.sql"
-  ["keycloak"]="$LATEST_BACKUP_DIR/keycloak.sql"
-  ["openfga"]="$LATEST_BACKUP_DIR/openfga.sql"
-)
+declare -A DATABASES
+for db_name in "${DATABASES_TO_MANAGE[@]}"; do
+  DATABASES["$db_name"]="$LATEST_BACKUP_DIR/$db_name.sql"
+done
 
 declare -A DATABASES_TO_RESTORE=()
 
