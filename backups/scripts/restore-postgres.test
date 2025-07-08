@@ -1,0 +1,93 @@
+Voici un plan de test structuré pour valider le script restore-postgres.sh dans différents scénarios.
+
+
+  Objectif du Test
+  Valider que le script de restauration est robuste, fonctionne comme prévu dans les cas d'utilisation courants, et gère les erreurs et les annulations de manière appropriée sans causer d'effets de bord indésirables.
+
+
+  Prérequis
+   1. L'environnement Docker est en cours d'exécution (docker compose up).
+   2. Vous disposez d'au moins un dossier de backup complet dans nextjs-dashboard/backups/ contenant les fichiers .sql (openfga, parkigo, keycloak) et le fichier keycloak-realm.json.
+   3. Vous disposez d'un état "connu" de vos bases de données pour pouvoir vérifier que la restauration a bien eu lieu.
+
+  ---
+
+  Plan de Test Détaillé
+
+
+  Test Case 1 : Le Scénario Idéal (Restauration Complète)
+   * Objectif : Vérifier que la restauration de toutes les bases de données et l'import du realm Keycloak fonctionnent parfaitement lorsque l'utilisateur accepte toutes les options par défaut.
+   * Étapes :
+       1. Lancez le script : ./backups/scripts/restore-postgres.sh.
+       2. Sélectionnez un dossier de backup valide.
+       3. À la question "Souhaites-tu faire un backup...", répondez n.
+       4. À la question "Restaurer toutes les bases de données...", répondez Y (ou appuyez sur Entrée).
+       5. À la question "Importer le realm Keycloak...", répondez Y (ou appuyez sur Entrée).
+       6. Au résumé final, confirmez avec y.
+   * Résultat Attendu :
+       * Le script s'exécute jusqu'à la fin sans erreur.
+       * Les bases de données openfga, parkigo, et keycloak sont supprimées et recréées à partir des fichiers .sql.
+       * Le realm Keycloak est importé (vérifiable dans la console d'administration Keycloak après redémarrage).
+       * Le FGA_STORE_ID dans le fichier .env.local est mis à jour avec l'ID du store restauré.
+
+
+  Test Case 2 : Restauration Sélective (Bases de Données Uniquement)
+   * Objectif : S'assurer que l'utilisateur peut choisir de ne restaurer que certaines bases de données et de ne pas importer le realm Keycloak.
+   * Étapes :
+       1. Lancez le script.
+       2. Sélectionnez un dossier de backup valide.
+       3. Répondez n au backup préventif.
+       4. À la question "Restaurer toutes les bases de données...", répondez n.
+       5. Restaurez parkigo (Y) mais pas openfga (n) ni keycloak (n).
+       6. À la question "Importer le realm Keycloak...", répondez n.
+       7. Confirmez avec y.
+   * Résultat Attendu :
+       * Seule la base parkigo est restaurée. Les autres bases restent intactes.
+       * Le résumé final doit clairement indiquer que openfga et keycloak ont été "Ignorée".
+       * Le FGA_STORE_ID dans le fichier .env.local ne doit pas être mis à jour.
+
+
+  Test Case 3 : Annulation par l'Utilisateur
+   * Objectif : Vérifier que le script s'arrête proprement à chaque point d'annulation possible.
+   * Scénarios :
+       1. Annulation au choix du dossier : Lancez le script et sélectionnez l'option "Annuler".
+       2. Annulation à la confirmation finale : Lancez le script, faites des sélections, mais au résumé final, répondez N (ou appuyez sur Entrée).
+   * Résultat Attendu :
+       * Dans les deux cas, le script doit afficher un message d'annulation et se terminer immédiatement.
+       * Aucun service Docker ne doit être arrêté, et aucune base de données ne doit être modifiée.
+
+
+  Test Case 4 : Aucune Action Sélectionnée
+   * Objectif : S'assurer que le script se termine proprement si l'utilisateur ne sélectionne aucune action de restauration.
+   * Étapes :
+       1. Lancez le script.
+       2. Sélectionnez un dossier de backup valide.
+       3. Répondez n au backup préventif.
+       4. Répondez n à la restauration de toutes les bases.
+       5. Répondez n à la restauration de chaque base individuelle.
+       6. Répondez n à l'import du realm Keycloak.
+   * Résultat Attendu :
+       * Le script doit afficher "Rien à restaurer. Opération annulée." et se terminer avant la confirmation finale.
+       * Aucune modification ne doit être apportée au système.
+
+
+  Test Case 5 : Backup Préventif
+   * Objectif : Valider que la fonctionnalité de backup préventif fonctionne.
+   * Étapes :
+       1. Lancez le script.
+       2. Sélectionnez un dossier de backup valide.
+       3. À la question "Souhaites-tu faire un backup...", répondez Y.
+       4. Continuez ou annulez le reste du processus.
+   * Résultat Attendu :
+       * Le script backup-postgres.sh est exécuté.
+       * Un nouveau dossier de backup, nommé avec la date et l'heure actuelles, doit être créé dans le répertoire backups/.
+
+  ---
+
+
+  Comment Vérifier les Résultats
+
+
+   * Bases de données : Utilisez un client SQL (comme psql ou DBeaver) pour vous connecter aux bases de données et vérifier que les données correspondent bien à celles des fichiers de backup.
+   * Realm Keycloak : Connectez-vous à la console d'administration de Keycloak et vérifiez que les clients, les utilisateurs et les configurations du realm correspondent au fichier keycloak-realm.json.
+   * Fichier .env : Ouvrez nextjs-dashboard/.env.local et vérifiez la valeur de FGA_STORE_ID.
