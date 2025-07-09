@@ -66,7 +66,22 @@ select DIR_NAME in "${BACKUP_DIRS[@]##*/}" "Annuler"; do
   if [ "$DIR_NAME" = "Annuler" ]; then echo -e "\n${RED}❌ Opération annulée.${NC}"; exit 0; fi
   if [ -n "$DIR_NAME" ]; then
     SELECTED_BACKUP_DIR="$BACKUPS_DIR/$DIR_NAME"
-    echo -e "\n${GREEN}✅ Dossier sélectionné : ${MAGENTA}$SELECTED_BACKUP_DIR${NC}"; break
+    echo -e "\n${GREEN}✅ Dossier sélectionné : ${MAGENTA}$SELECTED_BACKUP_DIR${NC}"
+    
+    # Tente d'extraire et d'afficher la date du backup de manière lisible
+    datetime_part=$(echo "$DIR_NAME" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}')
+    if [ -n "$datetime_part" ]; then
+        date_part=${datetime_part%_*}
+        time_part=${datetime_part#*_}
+        time_part_formatted=${time_part//-/:}
+        full_date_string="$date_part $time_part_formatted"
+
+        human_readable_date=$(LC_TIME=fr_FR.UTF-8 date -d "$full_date_string" "+%A %e %B %Y - %Hh %Mm %Ss" 2>/dev/null)
+        if [ -n "$human_readable_date" ]; then
+            echo -e "   ${GREEN}Date du backup : ${MAGENTA}$human_readable_date${NC}"
+        fi
+    fi
+    break
   else
     echo -e "\n${RED}⛔ Sélection invalide. Choisis un numéro valide.${NC}"
   fi
@@ -84,13 +99,24 @@ fi
 declare -A CHOICES
 declare -A STATUS
 
-# --- Détection des fichiers disponibles ---
+# --- Détection et affichage des fichiers disponibles ---
+echo -e "\n${BLUE}💾 Éléments de restauration disponibles dans le dossier sélectionné :${NC}"
+FOUND_FILES=$(find "$SELECTED_BACKUP_DIR" -maxdepth 1 -type f \( -name "*.sql" -o -name "*.json" -o -name "*.yaml" \) | sort)
+if [ -z "$FOUND_FILES" ]; then
+    echo -e " - ${YELLOW}Aucun fichier de restauration trouvé.${NC}"
+else
+    while IFS= read -r file; do
+        echo -e " - ${GREEN}$(basename "$file")${NC}"
+    done <<< "$FOUND_FILES"
+fi
+
+# --- Définition des chemins de fichiers ---
 KEYCLOAK_SQL_BACKUP="$SELECTED_BACKUP_DIR/keycloak.sql"
 KEYCLOAK_JSON_BACKUP="$SELECTED_BACKUP_DIR/keycloak-realm.json"
 KEYCLOAK_JSON_DEV="$PROJECT_ROOT/docker/keycloak/config/realm.json"
 OPENFGA_SQL_BACKUP="$SELECTED_BACKUP_DIR/openfga.sql"
-# OPENFGA_YAML_BACKUP="$SELECTED_BACKUP_DIR/openfga-store.yaml" # Placeholder for future use
-# OPENFGA_YAML_DEV="$PROJECT_ROOT/docker/openfga/config/store.yaml" # Placeholder for future use
+# OPENFGA_YAML_BACKUP="$SELECTED_BACKUP_DIR/openfga-store.yaml" # Placeholder
+# OPENFGA_YAML_DEV="$PROJECT_ROOT/docker/openfga/config/store.yaml" # Placeholder
 
 echo -e "\n${BLUE}⚙️ Configuration de la restauration...${NC}"
 
@@ -114,12 +140,11 @@ if [ ${#kc_options[@]} -gt 2 ]; then
     esac
   done
 else
+  # Fallback si aucun fichier n'est trouvé (même pas dev), on ignore
   CHOICES["keycloak"]="skip"
-  echo -e "\n${YELLOW}⏩ Aucun fichier de restauration trouvé pour Keycloak, service ignoré.${NC}"
 fi
 
 # --- Menu pour OpenFGA (structure prête pour le futur) ---
-# Pour l'instant, on utilise une simple question Y/N pour le SQL
 if [[ -f "$OPENFGA_SQL_BACKUP" ]]; then
     echo -ne "\n${CYAN}➤ Restaurer la base de données 'openfga' depuis SQL ? (Y/n) : ${NC}"
     read -r restore_openfga; restore_openfga=${restore_openfga:-y}
@@ -146,6 +171,7 @@ for db_name in "${DATABASES_TO_MANAGE[@]}"; do
     fi
   fi
 done
+
 
 # === Résumé et Confirmation Finale ===
 echo -e "\n${YELLOW}⚠️ RÉSUMÉ DE L'OPÉRATION DE RESTAURATION ⚠️${NC}"
@@ -224,12 +250,12 @@ docker compose rm -sfv keycloak
 
   if ! wait_for_keycloak_ready; then
     echo -e "${RED}❌ Keycloak n'est pas devenu sain. Impossible d'importer le realm.${NC}"
-    STATUS["Keycloak"]="${RED}❌ Échoué (Keycloak non sain)${NC}"
+    STATUS["keycloak"]="${RED}❌ Échoué (Keycloak non sain)${NC}"
   else
     TEMP_REALM_FILE="/tmp/realm.json"
     if ! docker cp "$SOURCE_FILE" keycloak:"$TEMP_REALM_FILE"; then
       echo -e "${RED}❌ Erreur lors de la copie du fichier realm.json.${NC}"
-      STATUS["Keycloak"]="${RED}❌ Échoué (copie fichier)${NC}"
+      STATUS["keycloak"]="${RED}❌ Échoué (copie fichier)${NC}"
     else
       docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user "$KEYCLOAK_ADMIN_USERNAME" --password "$KEYCLOAK_ADMIN_PASSWORD" > /dev/null
       echo -e "${YELLOW}Suppression du realm existant '${KEYCLOAK_REALM}' (pour idempotence)...${NC}"
@@ -237,10 +263,10 @@ docker compose rm -sfv keycloak
       echo -e "${YELLOW}Importation du nouveau realm '${KEYCLOAK_REALM}'...${NC}"
       if docker exec keycloak /opt/keycloak/bin/kcadm.sh create realms -f "$TEMP_REALM_FILE"; then
         echo -e "${GREEN}✅ Realm '${KEYCLOAK_REALM}' importé avec succès.${NC}"
-        STATUS["Keycloak"]="${GREEN}✅ Restauré (${SOURCE_DESC})${NC}"
+        STATUS["keycloak"]="${GREEN}✅ Restauré (${SOURCE_DESC})${NC}"
       else
         echo -e "${RED}❌ Erreur lors de l'import du realm '${KEYCLOAK_REALM}'.${NC}"
-        STATUS["Keycloak"]="${RED}❌ Échoué (import kcadm)${NC}"
+        STATUS["keycloak"]="${RED}❌ Échoué (import kcadm)${NC}"
       fi
     fi
   fi
