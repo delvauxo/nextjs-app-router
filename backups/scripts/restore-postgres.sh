@@ -225,11 +225,14 @@ until docker exec postgres_ssl pg_isready -U postgres > /dev/null 2>&1; do
 done
 echo -e "${GREEN}✅ PostgreSQL est prêt.${NC}"
 
-# --- Restauration des bases de données ---
+# --- Restauration des bases de données (sauf Keycloak) ---
 declare -A STATUS
 if [ ${#DATABASES_TO_RESTORE[@]} -gt 0 ]; then
-  echo -e "\n${BLUE}🔄 Restauration des bases de données...${NC}"
+  echo -e "\n${BLUE}🔄 Restauration des bases de données (Keycloak est traité séparément)...${NC}"
   for DB_NAME in "${!DATABASES_TO_RESTORE[@]}"; do
+    if [ "$DB_NAME" == "keycloak" ]; then
+      continue
+    fi
     FILE_PATH="${DATABASES_TO_RESTORE[$DB_NAME]}"
     echo -e "\n${YELLOW}Traitement de la base '$DB_NAME'...${NC}"
     psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();"
@@ -245,42 +248,67 @@ if [ ${#DATABASES_TO_RESTORE[@]} -gt 0 ]; then
   done
 fi
 
-# --- Import du realm Keycloak ---
+# --- Traitement de Keycloak (Import JSON ou Restauration SQL) ---
+# L'import JSON est prioritaire sur la restauration SQL.
 if [[ "$IMPORT_KC_REALM" == "y" || "$IMPORT_KC_REALM" == "Y" ]]; then
-  echo -e "\n${BLUE}🚀 Import du realm Keycloak depuis JSON avec kcadm.sh...${NC}"
-
-  echo -e "${YELLOW}Démarrage de Keycloak et attente de sa disponibilité...${NC}"
+  echo -e "\n${BLUE}🚀 Restauration de Keycloak via import de realm (JSON)...${NC}"
+  echo -e "${YELLOW}Nettoyage de l'état précédent de Keycloak (conteneur et volume)...${NC}"
+  docker compose rm -sfv keycloak
+  
+  echo -e "${YELLOW}Démarrage de Keycloak pour initialisation...${NC}"
   docker compose up -d keycloak
 
   if ! wait_for_keycloak_ready; then
-    echo -e "${RED}❌ Keycloak n'est pas devenu sain dans le temps imparti. Impossible de procéder à l'import du realm.${NC}"
-    STATUS["Keycloak Realm"]="${RED}❌ Échoué (Keycloak non sain)${NC}"
+    echo -e "${RED}❌ Keycloak n'est pas devenu sain. Impossible d'importer le realm.${NC}"
+    STATUS["Keycloak"]="${RED}❌ Échoué (Keycloak non sain)${NC}"
   else
-    echo -e "${GREEN}✅ Keycloak est sain.${NC}"
+    echo -e "${GREEN}✅ Keycloak est sain et prêt pour l'import.${NC}"
     TEMP_REALM_FILE="/tmp/realm.json"
-    echo -e "${YELLOW}Copie du fichier realm.json vers le conteneur Keycloak...${NC}"
+    echo -e "${YELLOW}Copie du fichier realm.json vers le conteneur...${NC}"
     if ! docker cp "$KEYCLOAK_JSON_IMPORT_FILE" keycloak:"$TEMP_REALM_FILE"; then
       echo -e "${RED}❌ Erreur lors de la copie du fichier realm.json.${NC}"
-      STATUS["Keycloak Realm"]="${RED}❌ Échoué (copie fichier)${NC}"
+      STATUS["Keycloak"]="${RED}❌ Échoué (copie fichier)${NC}"
     else
-      echo -e "${YELLOW}Tentative de suppression du realm existant '${KEYCLOAK_REALM}' (pour idempotence)...${NC}"
-      # Supprimer le realm s'il existe. Ignorer l'erreur si le realm n'existe pas.
-      docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user "$KEYCLOAK_ADMIN_USERNAME" --password "$KEYCLOAK_ADMIN_PASSWORD" > /dev/null 2>&1
+      echo -e "${YELLOW}Configuration de kcadm.sh...${NC}"
+      docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user "$KEYCLOAK_ADMIN_USERNAME" --password "$KEYCLOAK_ADMIN_PASSWORD" > /dev/null
+      
+      echo -e "${YELLOW}Suppression du realm existant '${KEYCLOAK_REALM}' (pour idempotence)...${NC}"
       docker exec keycloak /opt/keycloak/bin/kcadm.sh delete realms/"$KEYCLOAK_REALM" > /dev/null 2>&1 || true
-      echo -e "${GREEN}✅ Ancien realm '${KEYCLOAK_REALM}' supprimé ou non trouvé.${NC}"
+      echo -e "${GREEN}✅ Ancien realm '${KEYCLOAK_REALM}' supprimé (ou non trouvé).${NC}"
 
       echo -e "${YELLOW}Importation du nouveau realm '${KEYCLOAK_REALM}'...${NC}"
       if docker exec keycloak /opt/keycloak/bin/kcadm.sh create realms -f "$TEMP_REALM_FILE"; then
         echo -e "${GREEN}✅ Realm '${KEYCLOAK_REALM}' importé avec succès.${NC}"
-        STATUS["Keycloak Realm"]="${GREEN}✅ Importé${NC}"
+        STATUS["Keycloak"]="${GREEN}✅ Restauré via import JSON${NC}"
       else
         echo -e "${RED}❌ Erreur lors de l'import du realm '${KEYCLOAK_REALM}'.${NC}"
-        STATUS["Keycloak Realm"]="${RED}❌ Échoué (import kcadm)${NC}"
+        STATUS["Keycloak"]="${RED}❌ Échoué (import kcadm)${NC}"
       fi
     fi
   fi
+  # Si l'import JSON est fait, on s'assure que le statut de la DB keycloak est cohérent
+  if [[ -v DATABASES_TO_RESTORE["keycloak"] ]]; then
+      STATUS["keycloak"]="${YELLOW}⏩ Ignorée (import JSON prioritaire)${NC}"
+  fi
+
+elif [[ -v DATABASES_TO_RESTORE["keycloak"] ]]; then
+  echo -e "\n${BLUE}🚀 Restauration de Keycloak via base de données (SQL)...${NC}"
+  echo -e "${YELLOW}Nettoyage de l'état précédent de Keycloak (conteneur et volume)...${NC}"
+  docker compose rm -sfv keycloak
+  
+  echo -e "${YELLOW}Restauration de la base de données 'keycloak'...${NC}"
+  dropdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" --if-exists "keycloak"
+  createdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "keycloak"
+  if psql --set=ON_ERROR_STOP=on -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "keycloak" -f "${DATABASES_TO_RESTORE["keycloak"]}"; then
+    echo -e "${GREEN}✅ Restauration de la base de données 'keycloak' réussie.${NC}"
+    STATUS["keycloak"]="${GREEN}✅ Restaurée via SQL${NC}"
+  else
+    echo -e "${RED}❌ Erreur lors de la restauration de la base de données 'keycloak'.${NC}"
+    STATUS["keycloak"]="${RED}❌ Échouée (restauration SQL)${NC}"
+  fi
 else
-  STATUS["Keycloak Realm"]="${YELLOW}⏩ Ignoré${NC}"
+  # Ni import JSON, ni restauration SQL pour keycloak
+  STATUS["Keycloak"]="${YELLOW}⏩ Ignoré${NC}"
 fi
 
 # --- Redémarrage des services ---
