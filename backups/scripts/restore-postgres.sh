@@ -6,6 +6,92 @@ detect_environment
 load_env_variables
 create_pgpass
 
+# === Fonctions de vérification Keycloak ===
+wait_for_keycloak_ready() {
+  local attempts=0
+  local MAX_ATTEMPTS=12 # Paramètres d'attente Keycloak
+  local SLEEP_SECONDS=5
+
+  echo -e "${CYAN}⏳ Vérification que Keycloak est prêt (attente max : $((MAX_ATTEMPTS * SLEEP_SECONDS))s)...${NC}"
+  echo -e "   (en vérifiant la disponibilité du realm '${KEYCLOAK_ADMIN_REALM}')...${NC}"
+
+  until check_realm_exists "$KEYCLOAK_ADMIN_REALM"; do
+    exit_code=$?
+    ((attempts++))
+
+    case "$exit_code" in
+      0)
+        break # Succès, sortir de la boucle
+        ;;
+      1)
+        echo -e "${YELLOW}   - Tentative ${attempts}/${MAX_ATTEMPTS} : Impossible de contacter Keycloak ou identifiants admin invalides. Keycloak démarre peut-être...${NC}"
+        ;;
+      2)
+        echo -e "${YELLOW}   - Tentative ${attempts}/${MAX_ATTEMPTS} : Le realm admin '${KEYCLOAK_ADMIN_REALM}' est introuvable. Keycloak n'est probablement pas prêt.${NC}"
+        ;;
+      3)
+        echo -e "${RED}   - Tentative ${attempts}/${MAX_ATTEMPTS} : Erreur d'authentification (HTTP 401) en vérifiant le realm admin. Token invalide ?${NC}"
+        ;;
+      4)
+        echo -e "${RED}   - Tentative ${attempts}/${MAX_ATTEMPTS} : Erreur HTTP inattendue lors de la vérification du realm admin.${NC}"
+        ;;
+      *)
+        echo -e "${RED}   - Tentative ${attempts}/${MAX_ATTEMPTS} : Erreur inconnue (code $exit_code).${NC}"
+        ;;
+    esac
+
+    if [ "$attempts" -ge "$MAX_ATTEMPTS" ]; then
+      echo -e "${RED}❌ Keycloak n'est toujours pas disponible après $((MAX_ATTEMPTS * SLEEP_SECONDS)) secondes.${NC}"
+      echo -e "   - Causes possibles : Keycloak non démarré ou identifiants admin incorrects dans le .env.${NC}"
+      return 1
+    fi
+
+    sleep "$SLEEP_SECONDS"
+  done
+
+  echo -e "${GREEN}✅ Keycloak est prêt.${NC}"
+}
+
+check_realm_exists() {
+  if [[ -z "${1:-}" ]]; then
+    echo -e "${RED}❌ Paramètre manquant pour check_realm_exists : nom du realm attendu.${NC}"
+    return 255 # Code d'erreur interne
+  fi
+  local REALM_TO_CHECK="$1"
+
+  # 🔑 Récupérer le token d'accès admin
+  local TOKEN_RESPONSE
+  TOKEN_RESPONSE=$(curl -s -X POST "${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_ADMIN_REALM}/protocol/openid-connect/token" \
+    -d "client_id=${KEYCLOAK_ADMIN_CLIENT_ID}" \
+    -d "username=${KEYCLOAK_ADMIN_USERNAME}" \
+    -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
+    -d "grant_type=password")
+
+  local ACCESS_TOKEN
+  ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+
+  if [[ -z "$ACCESS_TOKEN" ]]; then
+    return 1
+  fi
+
+  # 🔍 Vérifier le realm
+  local HTTP_CODE
+  HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X GET \
+    -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+    "${KEYCLOAK_BASE_URL}/admin/realms/${REALM_TO_CHECK}")
+
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    return 0 # Succès
+  elif [[ "$HTTP_CODE" == "404" ]]; then
+    return 2 # Realm non trouvé
+  elif [[ "$HTTP_CODE" == "401" ]]; then
+    return 3 # Authentification échouée avec le token
+  else
+    return 4 # Autre erreur HTTP
+  fi
+}
+
+
 # === Sélection du dossier de backup ===
 BACKUPS_DIR="$PROJECT_ROOT/backups"
 BACKUP_DIRS=($(find "$BACKUPS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name scripts | sort -r))
@@ -161,17 +247,38 @@ fi
 
 # --- Import du realm Keycloak ---
 if [[ "$IMPORT_KC_REALM" == "y" || "$IMPORT_KC_REALM" == "Y" ]]; then
-  echo -e "\n${BLUE}🚀 Import du realm Keycloak depuis JSON...${NC}"
-  echo -e "${YELLOW}Démarrage de Keycloak pour préparer l'import...${NC}"
+  echo -e "\n${BLUE}🚀 Import du realm Keycloak depuis JSON avec kcadm.sh...${NC}"
+
+  echo -e "${YELLOW}Démarrage de Keycloak et attente de sa disponibilité...${NC}"
   docker compose up -d keycloak
-  echo -e "${YELLOW}Création du dossier d'import dans le conteneur Keycloak...${NC}"
-  docker exec keycloak mkdir -p /opt/keycloak/data/import
-  echo -e "${YELLOW}Copie du fichier realm.json...${NC}"
-  docker cp "$KEYCLOAK_JSON_IMPORT_FILE" keycloak:/opt/keycloak/data/import/realm.json
-  echo -e "${YELLOW}Redémarrage de Keycloak pour forcer l'import...${NC}"
-  docker compose restart keycloak
-  echo -e "${GREEN}✅ Realm JSON copié. Keycloak redémarre pour un import automatique.${NC}"
-  STATUS["Keycloak Realm"]="${GREEN}✅ Importé${NC}"
+
+  if ! wait_for_keycloak_ready; then
+    echo -e "${RED}❌ Keycloak n'est pas devenu sain dans le temps imparti. Impossible de procéder à l'import du realm.${NC}"
+    STATUS["Keycloak Realm"]="${RED}❌ Échoué (Keycloak non sain)${NC}"
+  else
+    echo -e "${GREEN}✅ Keycloak est sain.${NC}"
+    TEMP_REALM_FILE="/tmp/realm.json"
+    echo -e "${YELLOW}Copie du fichier realm.json vers le conteneur Keycloak...${NC}"
+    if ! docker cp "$KEYCLOAK_JSON_IMPORT_FILE" keycloak:"$TEMP_REALM_FILE"; then
+      echo -e "${RED}❌ Erreur lors de la copie du fichier realm.json.${NC}"
+      STATUS["Keycloak Realm"]="${RED}❌ Échoué (copie fichier)${NC}"
+    else
+      echo -e "${YELLOW}Tentative de suppression du realm existant '${KEYCLOAK_REALM}' (pour idempotence)...${NC}"
+      # Supprimer le realm s'il existe. Ignorer l'erreur si le realm n'existe pas.
+      docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user "$KEYCLOAK_ADMIN_USERNAME" --password "$KEYCLOAK_ADMIN_PASSWORD" > /dev/null 2>&1
+      docker exec keycloak /opt/keycloak/bin/kcadm.sh delete realms/"$KEYCLOAK_REALM" > /dev/null 2>&1 || true
+      echo -e "${GREEN}✅ Ancien realm '${KEYCLOAK_REALM}' supprimé ou non trouvé.${NC}"
+
+      echo -e "${YELLOW}Importation du nouveau realm '${KEYCLOAK_REALM}'...${NC}"
+      if docker exec keycloak /opt/keycloak/bin/kcadm.sh create realms -f "$TEMP_REALM_FILE"; then
+        echo -e "${GREEN}✅ Realm '${KEYCLOAK_REALM}' importé avec succès.${NC}"
+        STATUS["Keycloak Realm"]="${GREEN}✅ Importé${NC}"
+      else
+        echo -e "${RED}❌ Erreur lors de l'import du realm '${KEYCLOAK_REALM}'.${NC}"
+        STATUS["Keycloak Realm"]="${RED}❌ Échoué (import kcadm)${NC}"
+      fi
+    fi
+  fi
 else
   STATUS["Keycloak Realm"]="${YELLOW}⏩ Ignoré${NC}"
 fi
@@ -221,5 +328,3 @@ if [[ -n "${STATUS["openfga"]:-}" ]] && [[ "${STATUS["openfga"]}" == "${GREEN}�
 else
   echo -e "\n${YELLOW}⏩ Base 'openfga' non restaurée ou échec, FGA_STORE_ID inchangé.${NC}"
 fi
-
-

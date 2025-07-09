@@ -55,6 +55,11 @@ services:
     volumes:
       - keycloak-data:/opt/keycloak/data  # Volume pour les données persistantes Keycloak
       # - ./docker/keycloak/config:/opt/keycloak/data/import:ro # Monte le dossier de config Keycloak dans le conteneur
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     networks:
       - openfga
 
