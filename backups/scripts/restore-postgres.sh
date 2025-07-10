@@ -68,7 +68,7 @@ select DIR_NAME in "${BACKUP_DIRS[@]##*/}" "Annuler"; do
     SELECTED_BACKUP_DIR="$BACKUPS_DIR/$DIR_NAME"
     echo -e "\n${GREEN}✅ Dossier sélectionné : ${MAGENTA}$SELECTED_BACKUP_DIR${NC}"
     
-    # Tente d'extraire et d'afficher la date du backup de manière lisible
+    # Tente d'extraire et d'afficher la date et le nom custom du backup
     datetime_part=$(echo "$DIR_NAME" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}')
     if [ -n "$datetime_part" ]; then
         date_part=${datetime_part%_*}
@@ -77,8 +77,18 @@ select DIR_NAME in "${BACKUP_DIRS[@]##*/}" "Annuler"; do
         full_date_string="$date_part $time_part_formatted"
 
         human_readable_date=$(LC_TIME=fr_FR.UTF-8 date -d "$full_date_string" "+%A %e %B %Y - %Hh %Mm %Ss" 2>/dev/null)
+        
         if [ -n "$human_readable_date" ]; then
-            echo -e "   ${GREEN}Date du backup : ${MAGENTA}$human_readable_date${NC}"
+            # Extrait le nom custom (ce qui suit la date)
+            custom_name_part=${DIR_NAME#"$datetime_part"}
+            custom_name=${custom_name_part#_}
+
+            # Construit la chaîne d'affichage
+            display_string="   ${GREEN}Date du backup : ${MAGENTA}$human_readable_date${NC}"
+            if [ -n "$custom_name" ]; then
+                display_string+=" ${GREEN}[${MAGENTA}$custom_name${GREEN}]${NC}"
+            fi
+            echo -e "$display_string"
         fi
     fi
     break
@@ -115,8 +125,8 @@ KEYCLOAK_SQL_BACKUP="$SELECTED_BACKUP_DIR/keycloak.sql"
 KEYCLOAK_JSON_BACKUP="$SELECTED_BACKUP_DIR/keycloak-realm.json"
 KEYCLOAK_JSON_DEV="$PROJECT_ROOT/docker/keycloak/config/realm.json"
 OPENFGA_SQL_BACKUP="$SELECTED_BACKUP_DIR/openfga.sql"
-# OPENFGA_YAML_BACKUP="$SELECTED_BACKUP_DIR/openfga-store.yaml" # Placeholder
-# OPENFGA_YAML_DEV="$PROJECT_ROOT/docker/openfga/config/store.yaml" # Placeholder
+OPENFGA_YAML_BACKUP="$SELECTED_BACKUP_DIR/openfga-store.yaml"
+OPENFGA_YAML_DEV="$PROJECT_ROOT/docker/openfga/config/store.yaml"
 
 echo -e "\n${BLUE}⚙️ Configuration de la restauration...${NC}"
 
@@ -144,17 +154,27 @@ else
   CHOICES["keycloak"]="skip"
 fi
 
-# --- Menu pour OpenFGA (structure prête pour le futur) ---
-if [[ -f "$OPENFGA_SQL_BACKUP" ]]; then
-    echo -ne "\n${CYAN}➤ Restaurer la base de données 'openfga' depuis SQL ? (Y/n) : ${NC}"
-    read -r restore_openfga; restore_openfga=${restore_openfga:-y}
-    if [[ "$restore_openfga" == "y" || "$restore_openfga" == "Y" ]]; then
-        CHOICES["openfga"]="sql_backup"
-    else
-        CHOICES["openfga"]="skip"
-    fi
+# --- Menu pour OpenFGA ---
+fga_options=()
+[[ -f "$OPENFGA_SQL_BACKUP" ]] && fga_options+=("Restaurer depuis SQL du backup")
+[[ -f "$OPENFGA_YAML_BACKUP" ]] && fga_options+=("Restaurer depuis YAML du backup")
+[[ -f "$OPENFGA_YAML_DEV" ]] && fga_options+=("Restaurer depuis YAML de dev")
+fga_options+=("Ignorer OpenFGA" "Annuler")
+
+if [ ${#fga_options[@]} -gt 2 ]; then
+  echo -e "\n${CYAN}➤ Comment restaurer OpenFGA ?${NC}"
+  select opt in "${fga_options[@]}"; do
+    case "$opt" in
+      "Restaurer depuis SQL du backup") CHOICES["openfga"]="sql_backup"; break;;
+      "Restaurer depuis YAML du backup") CHOICES["openfga"]="yaml_backup"; break;;
+      "Restaurer depuis YAML de dev") CHOICES["openfga"]="yaml_dev"; break;;
+      "Ignorer OpenFGA") CHOICES["openfga"]="skip"; break;;
+      "Annuler") echo -e "\n${RED}❌ Opération annulée.${NC}"; exit 0;;
+      *) echo -e "${RED}⛔ Sélection invalide.${NC}";;
+    esac
+  done
 else
-    CHOICES["openfga"]="skip"
+  CHOICES["openfga"]="skip"
 fi
 
 # --- Menu pour les autres bases de données ---
@@ -186,6 +206,8 @@ for service in "${!CHOICES[@]}"; do
       "sql_backup") description="sera SUPPRIMÉE et restaurée depuis SQL";;
       "json_backup") description="sera réinitialisé et restauré depuis le JSON du backup";;
       "json_dev") description="sera réinitialisé et restauré depuis le JSON de dev";;
+      "yaml_backup") description="sera réinitialisé et restauré depuis le YAML du backup";;
+      "yaml_dev") description="sera réinitialisé et restauré depuis le YAML de dev";;
     esac
     echo -e " - ${MAGENTA}${service}${NC} : $description"
   fi
@@ -263,12 +285,49 @@ docker compose rm -sfv keycloak
       echo -e "${YELLOW}Importation du nouveau realm '${KEYCLOAK_REALM}'...${NC}"
       if docker exec keycloak /opt/keycloak/bin/kcadm.sh create realms -f "$TEMP_REALM_FILE"; then
         echo -e "${GREEN}✅ Realm '${KEYCLOAK_REALM}' importé avec succès.${NC}"
-        STATUS["keycloak"]="${GREEN}✅ Restauré (${SOURCE_DESC})${NC}"
+        if [[ "${CHOICES[keycloak]}" == "json_dev" ]]; then
+          STATUS["keycloak"]="${GREEN}✅ Rechargé (${SOURCE_DESC})${NC}"
+        else
+          STATUS["keycloak"]="${GREEN}✅ Restauré (${SOURCE_DESC})${NC}"
+        fi
       else
         echo -e "${RED}❌ Erreur lors de l'import du realm '${KEYCLOAK_REALM}'.${NC}"
         STATUS["keycloak"]="${RED}❌ Échoué (import kcadm)${NC}"
       fi
     fi
+  fi
+fi
+
+# --- Exécution de la restauration d'OpenFGA (YAML) ---
+if [[ "${CHOICES[openfga]}" == "yaml_backup" || "${CHOICES[openfga]}" == "yaml_dev" ]]; then
+  SOURCE_FILE=""
+  SOURCE_DESC=""
+  if [[ "${CHOICES[openfga]}" == "yaml_backup" ]]; then
+    SOURCE_FILE="$OPENFGA_YAML_BACKUP"
+    SOURCE_DESC="YAML du backup"
+  else
+    SOURCE_FILE="$OPENFGA_YAML_DEV"
+    SOURCE_DESC="YAML de dev"
+  fi
+
+  echo -e "\n${BLUE}🚀 Restauration d'OpenFGA depuis ${SOURCE_DESC}...${NC}"
+  echo -e "${YELLOW}Nettoyage de l'état précédent d'OpenFGA (conteneur et volume)...${NC}"
+  docker compose rm -sfv openfga
+  
+  # On ne copie que si la source est différente de la destination (cas du backup)
+  if [[ "$SOURCE_FILE" != "$OPENFGA_YAML_DEV" ]]; then
+    echo -e "${YELLOW}Copie du nouveau fichier de configuration store...${NC}"
+    if cp "$SOURCE_FILE" "$OPENFGA_YAML_DEV"; then
+      echo -e "${GREEN}✅ Fichier de configuration copié avec succès.${NC}"
+      STATUS["openfga"]="${GREEN}✅ Restauré (${SOURCE_DESC})${NC}"
+    else
+      echo -e "${RED}❌ Erreur lors de la copie du fichier de configuration.${NC}"
+      STATUS["openfga"]="${RED}❌ Échoué (copie fichier)${NC}"
+    fi
+  else
+    # Si la source est le fichier de dev, aucune copie n'est nécessaire
+    echo -e "${GREEN}✅ Utilisation du fichier de configuration de dev existant.${NC}"
+    STATUS["openfga"]="${GREEN}✅ Rechargé (${SOURCE_DESC})${NC}"
   fi
 fi
 
