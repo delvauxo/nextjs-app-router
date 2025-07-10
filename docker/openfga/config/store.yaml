@@ -1,5 +1,5 @@
 name: parkigo-store
-model: |
+model: |+
     model
       schema 1.1
 

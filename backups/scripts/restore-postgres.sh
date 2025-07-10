@@ -356,9 +356,9 @@ docker compose rm -sfv keycloak
       if docker exec keycloak /opt/keycloak/bin/kcadm.sh create realms -f "$TEMP_REALM_FILE"; then
         echo -e "${GREEN}✅ Realm '${KEYCLOAK_REALM}' importé avec succès.${NC}"
         if [[ "${CHOICES[keycloak]}" == "json_dev" ]]; then
-          STATUS["keycloak"]="${GREEN}✅ Rechargé (${SOURCE_DESC})${NC}"
+          STATUS["keycloak"]="${GREEN}✅ Realm rechargé (${SOURCE_DESC})${NC}"
         else
-          STATUS["keycloak"]="${GREEN}✅ Restauré (${SOURCE_DESC})${NC}"
+          STATUS["keycloak"]="${GREEN}✅ Realm importé (${SOURCE_DESC})${NC}"
         fi
       else
         echo -e "${RED}❌ Erreur lors de l'import du realm '${KEYCLOAK_REALM}'.${NC}"
@@ -393,7 +393,7 @@ if [[ "${CHOICES[openfga]}" == "yaml_backup" || "${CHOICES[openfga]}" == "yaml_d
     echo -e "${YELLOW}Copie du nouveau fichier de configuration store...${NC}"
     if cp "$SOURCE_FILE" "$OPENFGA_YAML_DEV"; then
       echo -e "${GREEN}✅ Fichier de configuration copié avec succès.${NC}"
-      STATUS["openfga"]="${GREEN}✅ Restauré (${SOURCE_DESC})${NC}"
+      STATUS["openfga"]="${GREEN}✅ Fichier de configuration restauré et prêt pour l'importation (${SOURCE_DESC})${NC}"
     else
       echo -e "${RED}❌ Erreur lors de la copie du fichier de configuration.${NC}"
       STATUS["openfga"]="${RED}❌ Échoué (copie fichier)${NC}"
@@ -401,7 +401,7 @@ if [[ "${CHOICES[openfga]}" == "yaml_backup" || "${CHOICES[openfga]}" == "yaml_d
   else
     # Si la source est le fichier de dev, aucune copie n'est nécessaire
     echo -e "${GREEN}✅ Utilisation du fichier de configuration de dev existant.${NC}"
-    STATUS["openfga"]="${GREEN}✅ Rechargé (${SOURCE_DESC})${NC}"
+    STATUS["openfga"]="${GREEN}✅ Configuré et prêt pour l'importation (${SOURCE_DESC})${NC}"
   fi
 fi
 
