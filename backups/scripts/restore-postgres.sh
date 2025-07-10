@@ -1,10 +1,31 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
+# === Vérification des dépendances ===
+check_dependencies() {
+  local missing_deps=()
+  if ! command -v fga &> /dev/null; then
+    missing_deps+=("fga (OpenFGA CLI)")
+  fi
+  if ! command -v jq &> /dev/null; then
+    missing_deps+=("jq")
+  fi
+
+  if [ ${#missing_deps[@]} -ne 0 ]; then
+    echo -e "${RED}❌ Dépendances manquantes requises pour ce script :${NC}"
+    for dep in "${missing_deps[@]}"; do
+      echo -e "   - ${YELLOW}${dep}${NC}"
+    done
+    echo -e "${CYAN}Veuillez les installer pour continuer.${NC}"
+    exit 1
+  fi
+}
+
 # === Initialisation ===
 detect_environment
 load_env_variables
 create_pgpass
+check_dependencies
 
 # === Fonctions de vérification Keycloak ===
 wait_for_keycloak_ready() {
@@ -53,6 +74,55 @@ check_realm_exists() {
     401) return 3 ;;
     *) return 4 ;;
   esac
+}
+
+wait_for_openfga_ready() {
+  local attempts=0
+  local MAX_ATTEMPTS=12
+  local SLEEP_SECONDS=5
+  # L'URL du health check pour le service OpenFGA, utilisant le port correct
+  local OPENFGA_HEALTH_URL="http://localhost:8080/healthz" 
+
+  echo -e "${CYAN}⏳ Vérification que OpenFGA est prêt (attente max : $((MAX_ATTEMPTS * SLEEP_SECONDS))s)...${NC}"
+
+  until curl -sf -o /dev/null "$OPENFGA_HEALTH_URL"; do
+    ((attempts++))
+    if [ "$attempts" -ge "$MAX_ATTEMPTS" ]; then
+      echo -e "${RED}❌ OpenFGA n'est toujours pas disponible après $((MAX_ATTEMPTS * SLEEP_SECONDS)) secondes.${NC}"
+      return 1
+    fi
+    echo -e "${YELLOW}   - Tentative ${attempts}/${MAX_ATTEMPTS} : OpenFGA n'est pas encore joignable sur ${OPENFGA_HEALTH_URL}...${NC}"
+    sleep "$SLEEP_SECONDS"
+  done
+  echo -e "${GREEN}✅ OpenFGA est prêt.${NC}"
+  return 0
+}
+
+# === Fonction pour recréer une base de données ===
+recreate_database() {
+  local DB_NAME=$1
+  if [ -z "$DB_NAME" ]; then
+    echo -e "${RED}❌ Nom de base de données non fourni à la fonction recreate_database.${NC}"
+    return 1
+  fi
+
+  echo -e "\n${BLUE}🔄 Préparation de la base de données '$DB_NAME'...${NC}"
+  echo -e "${YELLOW}   - Fermeture des connexions existantes...${NC}"
+  psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();" >/dev/null 2>&1
+  
+  echo -e "${YELLOW}   - Suppression de la base de données (si elle existe)...${NC}"
+  if ! dropdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" --if-exists "$DB_NAME"; then
+    echo -e "${RED}❌ Échec de la suppression de la base de données '$DB_NAME'. Le script va s'arrêter.${NC}"
+    exit 1
+  fi
+  
+  echo -e "${YELLOW}   - Création de la base de données vierge...${NC}"
+  if ! createdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$DB_NAME"; then
+    echo -e "${RED}❌ Échec de la création de la base de données '$DB_NAME'. Le script va s'arrêter.${NC}"
+    exit 1
+  fi
+  
+  echo -e "${GREEN}✅ Base de données '$DB_NAME' prête.${NC}"
 }
 
 # === Sélection du dossier de backup ===
@@ -238,15 +308,15 @@ for service in "${!CHOICES[@]}"; do
   if [[ "${CHOICES[$service]}" == "sql_backup" ]]; then
     DB_NAME=$service
     FILE_PATH="$SELECTED_BACKUP_DIR/$DB_NAME.sql"
-    echo -e "\n${BLUE}🔄 Restauration de '$DB_NAME' depuis SQL...${NC}"
-    psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();" >/dev/null 2>&1
-    dropdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" --if-exists "$DB_NAME"
-    createdb -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$DB_NAME"
+    
+    recreate_database "$DB_NAME"
+
+    echo -e "${YELLOW}   - Importation du contenu depuis le fichier SQL...${NC}"
     if psql --set=ON_ERROR_STOP=on -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$DB_NAME" -f "$FILE_PATH" >/dev/null; then
-      echo -e "${GREEN}✅ Restauration de '$DB_NAME' réussie.${NC}"
+      echo -e "${GREEN}✅ Restauration de '$DB_NAME' depuis SQL réussie.${NC}"
       STATUS["$DB_NAME"]="${GREEN}✅ Restaurée (SQL)${NC}"
     else
-      echo -e "${RED}❌ Erreur lors de la restauration de '$DB_NAME'.${NC}"
+      echo -e "${RED}❌ Erreur lors de l'importation SQL pour '$DB_NAME'.${NC}"
       STATUS["$DB_NAME"]="${RED}❌ Échouée (SQL)${NC}"
     fi
   fi
@@ -310,7 +380,11 @@ if [[ "${CHOICES[openfga]}" == "yaml_backup" || "${CHOICES[openfga]}" == "yaml_d
     SOURCE_DESC="YAML de dev"
   fi
 
-  echo -e "\n${BLUE}🚀 Restauration d'OpenFGA depuis ${SOURCE_DESC}...${NC}"
+  echo -e "\n${BLUE}🚀 Restauration/Rechargement d'OpenFGA depuis ${SOURCE_DESC}...${NC}"
+  
+  # On s'assure que la base de données existe et est vierge avant de continuer
+  recreate_database "openfga"
+
   echo -e "${YELLOW}Nettoyage de l'état précédent d'OpenFGA (conteneur et volume)...${NC}"
   docker compose rm -sfv openfga
   
@@ -349,26 +423,93 @@ for ITEM in "${!STATUS[@]}"; do
 done | sort
 
 # === Synchronisation FGA_STORE_ID ===
-if [[ "${STATUS[openfga]}" == "${GREEN}✅ Restaurée (SQL)${NC}" ]]; then
-  echo -e "\n${BLUE}🔄 Synchronisation de FGA_STORE_ID...${NC}"
+FGA_RESTORE_STATUS=${STATUS[openfga]:-}
+NEW_FGA_STORE_ID=""
+
+# --- Logique pour la restauration SQL ---
+if [[ "$FGA_RESTORE_STATUS" == "${GREEN}✅ Restaurée (SQL)${NC}" ]]; then
+  echo -e "\n${BLUE}🔄 Synchronisation de FGA_STORE_ID depuis le backup SQL...${NC}"
   OPENFGA_SQL_FILE="$SELECTED_BACKUP_DIR/openfga.sql"
   if [ -f "$OPENFGA_SQL_FILE" ]; then
-    RESTORED_STORE_ID=$(awk '/^COPY public.store / {getline; print $1}' "$OPENFGA_SQL_FILE" | grep -E '^[0-9A-Z]{26}' | head -n 1 || true)
-    if [ -n "$RESTORED_STORE_ID" ]; then
-      echo -e "${GREEN}✅ Store ID restauré détecté : $RESTORED_STORE_ID${NC}"
-      echo -e "${YELLOW}✏️ Mise à jour de ${MAGENTA}$ENV_FILE${NC}"
-      if grep -Eq "^FGA_STORE_ID\s*=" "$ENV_FILE"; then
-        sed -i.bak -E "s/^FGA_STORE_ID\s*=.*/FGA_STORE_ID=$RESTORED_STORE_ID/" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
-      else
-        echo -e "\nFGA_STORE_ID=$RESTORED_STORE_ID" >> "$ENV_FILE"
-      fi
-      echo -e "${GREEN}✅ FGA_STORE_ID mis à jour.${NC}"
-    else
-      echo -e "${RED}⚠️ Aucun Store ID valide trouvé dans $OPENFGA_SQL_FILE. FGA_STORE_ID non modifié.${NC}"
+    NEW_FGA_STORE_ID=$(awk '/^COPY public.store / {getline; print $1}' "$OPENFGA_SQL_FILE" | grep -E '^[0-9A-Z]{26}' | head -n 1 || true)
+    if [ -z "$NEW_FGA_STORE_ID" ]; then
+      echo -e "${RED}⚠️ Aucun Store ID valide trouvé dans $OPENFGA_SQL_FILE.${NC}"
     fi
   else
-    echo -e "${RED}⚠️ Fichier $OPENFGA_SQL_FILE introuvable. FGA_STORE_ID non modifié.${NC}"
+    echo -e "${RED}⚠️ Fichier $OPENFGA_SQL_FILE introuvable pour extraire le Store ID.${NC}"
+  fi
+# --- Logique pour la restauration YAML ---
+elif [[ "$FGA_RESTORE_STATUS" == *"${GREEN}✅"* ]]; then # Catches both "Rechargé" and "Restauré"
+  echo -e "\n${BLUE}🔄 Importation du modèle OpenFGA et synchronisation du FGA_STORE_ID...${NC}"
+  if ! wait_for_openfga_ready; then
+    echo -e "${RED}❌ OpenFGA n'est pas disponible. Impossible d'importer le modèle.${NC}"
+  else
+    # Détermine quel fichier YAML utiliser pour l'importation
+    IMPORT_FILE=""
+    if [[ "$FGA_RESTORE_STATUS" == *"YAML de dev"* ]]; then
+      IMPORT_FILE="$OPENFGA_YAML_DEV"
+    else
+      IMPORT_FILE="$OPENFGA_YAML_BACKUP"
+    fi
+    
+    echo -e "${YELLOW}   - Importation depuis le fichier ${MAGENTA}$(basename "$IMPORT_FILE")...${NC}"
+    
+    # On désactive temporairement l'arrêt sur erreur pour gérer l'échec manuellement
+    set +e
+    # On s'assure que FGA_STORE_ID est vide pour forcer la création d'un nouveau store
+    IMPORT_OUTPUT=$(FGA_API_URL="http://localhost:8080" FGA_STORE_ID="" fga store import --file "$IMPORT_FILE" 2>&1)
+    EXIT_CODE=$?
+    set -e # On réactive l'arrêt sur erreur
+
+    echo -e "${CYAN}DEBUG: Output from 'fga store import':${NC}"
+    echo "$IMPORT_OUTPUT"
+    echo -e "${CYAN}DEBUG: End of output from 'fga store import'.${NC}"
+    
+    if [ $EXIT_CODE -ne 0 ]; then
+      echo -e "${RED}❌ La commande 'fga store import' a échoué (code: $EXIT_CODE).${NC}"
+      echo -e "${RED}   Erreur retournée :${NC}
+$IMPORT_OUTPUT"
+      NEW_FGA_STORE_ID=""
+    elif [ -z "$IMPORT_OUTPUT" ]; then
+      echo -e "${RED}❌ La commande 'fga store import' a réussi mais n'a rien retourné.${NC}"
+      NEW_FGA_STORE_ID=""
+    else
+      # La commande a réussi, on tente de parser le JSON en toute sécurité
+      set +e
+      NEW_FGA_STORE_ID=$(jq -r '.store.id' <<< "$IMPORT_OUTPUT" 2>/dev/null)
+      JQ_EXIT_CODE=$?
+      set -e
+
+      if [ $JQ_EXIT_CODE -ne 0 ] || [ -z "$NEW_FGA_STORE_ID" ] || [ "$NEW_FGA_STORE_ID" == "null" ]; then
+        # Fallback extraction using grep and sed
+        FALLBACK_FGA_STORE_ID=$(echo "$IMPORT_OUTPUT" | grep -o '"id":"[^"]*"' | head -n 1 | sed 's/"id":"\([^"]*\)"/\1/' || true)
+        if [ -n "$FALLBACK_FGA_STORE_ID" ]; then
+          echo -e "${GREEN}✅ Store ID extrait avec grep/sed : $FALLBACK_FGA_STORE_ID${NC}"
+          NEW_FGA_STORE_ID="$FALLBACK_FGA_STORE_ID"
+        else
+          echo -e "${RED}❌ Impossible d'extraire le nouveau Store ID depuis la sortie JSON.${NC}"
+          echo -e "   Sortie reçue : $IMPORT_OUTPUT"
+          echo -e "${RED}❌ Échec de l'extraction avec grep/sed également.${NC}"
+          NEW_FGA_STORE_ID=""
+        fi
+      fi
+    fi
   fi
 else
   echo -e "\n${YELLOW}⏩ Base 'openfga' non restaurée ou échec, FGA_STORE_ID inchangé.${NC}"
+fi
+
+# --- Mise à jour du fichier .env si un nouvel ID a été trouvé ---
+if [ -n "$NEW_FGA_STORE_ID" ]; then
+  echo -e "${GREEN}✅ Nouveau Store ID détecté : $NEW_FGA_STORE_ID${NC}"
+  echo -e "${YELLOW}✏️ Mise à jour de ${MAGENTA}$ENV_FILE${NC}"
+  if grep -Eq "^FGA_STORE_ID\s*=" "$ENV_FILE"; then
+    sed -i.bak -E "s/^FGA_STORE_ID\s*=.*/FGA_STORE_ID=$NEW_FGA_STORE_ID/" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+  else
+    echo -e "\nFGA_STORE_ID=$NEW_FGA_STORE_ID" >> "$ENV_FILE"
+  fi
+  echo -e "${GREEN}✅ FGA_STORE_ID mis à jour.${NC}"
+elif [[ "$FGA_RESTORE_STATUS" == *"${GREEN}✅"* ]]; then
+  # Ce cas se produit si la restauration a réussi mais que la récupération de l'ID a échoué
+  echo -e "${RED}⚠️ La restauration d'OpenFGA a réussi, mais la synchronisation du Store ID a échoué. Votre application pourrait ne pas fonctionner.${NC}"
 fi
